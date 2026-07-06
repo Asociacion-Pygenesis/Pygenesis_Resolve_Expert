@@ -1,0 +1,27 @@
+# Datos y artefactos pesados (ajusta si quieres versionar muestras pequeñas)
+data/raw/
+data/processed/
+data/train/*.json
+data/eval/*.json
+!data/train/.gitkeep
+!data/eval/.gitkeep
+
+models/checkpoints/
+models/lora-adapters/
+models/gguf/*.gguf
+models/gguf/*.bin
+!models/*/.gitkeep
+
+logs/*.log
+evals/*.json
+evals/*.csv
+
+# Config local
+config/paths.json
+config/ollama.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/

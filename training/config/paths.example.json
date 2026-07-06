@@ -1,0 +1,5 @@
+{
+  "pygenesis_plugin_root": "C:/Users/navar/UnityProjects/PygenesisPlugin",
+  "pygenesis_backend": "Tools/pygenesis_backend",
+  "comment": "Copia a paths.json (sin commitear secretos) y úsalo desde scripts para leer modelos del plugin."
+}

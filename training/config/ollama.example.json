@@ -1,0 +1,6 @@
+{
+  "base_url": "http://127.0.0.1:11434",
+  "model": "pygenesis-ai:latest",
+  "think": false,
+  "_comment": "Copia a ollama.json. Imagen Ollama personalizada (Pygenesis). think:false reduce razonamiento extra en /api/generate (Qwen 3 / thinking)."
+}
