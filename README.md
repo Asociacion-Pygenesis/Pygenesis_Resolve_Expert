@@ -21,7 +21,7 @@ Proyecto **hermano** de Pygenesis AI (Unity): no comparte datos ni pesos del mod
 ## Inicio rápido
 
 ```powershell
-Set-Location "C:\Users\navar\PycharmProjects\Pygenesis_ResolveExpert\training"
+Set-Location "C:\Users\your user\yourrepository\Pygenesis_ResolveExpert\training"
 .\scripts\setup_env_windows.ps1
 Copy-Item config\ollama.example.json config\ollama.json
 .\scripts\run_synthetic_general.ps1 -Passes 1
@@ -48,7 +48,7 @@ Fine-tuning Colab/Ollama: [`guia_finetuning_resolve.md`](guia_finetuning_resolve
 Tras entrenar y cuantizar:
 
 ```powershell
-cd "C:\Users\navar\PycharmProjects\Pygenesis_ResolveExpert"
+cd "C:\Users\youuser\yourrepository\Pygenesis_ResolveExpert"
 ollama create pygenesis-resolve -f Modelfile
 ```
 
