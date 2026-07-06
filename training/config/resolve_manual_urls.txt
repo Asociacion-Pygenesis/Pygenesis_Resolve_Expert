@@ -1,0 +1,18 @@
+# Documentación DaVinci Resolve — verificar URLs periódicamente (Blackmagic actualiza rutas).
+# Uso personal / investigación; revisa términos de uso antes de entrenar o distribuir modelos.
+
+# Manual y referencia (inglés; las respuestas del dataset pueden estar en español)
+https://documents.blackmagicdesign.com/UserManuals/DaVinci-Resolve-19-Reference-Manual.pdf
+https://www.blackmagicdesign.com/products/davinciresolve/training
+
+# Páginas de producto (contexto general; el HTML puede ser breve)
+https://www.blackmagicdesign.com/products/davinciresolve
+https://www.blackmagicdesign.com/products/davinciresolve/edit
+https://www.blackmagicdesign.com/products/davinciresolve/cut
+https://www.blackmagicdesign.com/products/davinciresolve/color
+https://www.blackmagicdesign.com/products/davinciresolve/fusion
+https://www.blackmagicdesign.com/products/davinciresolve/fairlight
+https://www.blackmagicdesign.com/products/davinciresolve/deliver
+
+# Nota: el PDF anterior requiere ingest_pdf_manual.py (colócalo en data/raw/pdf/).
+# Para HTML, añade aquí URLs directas a artículos de soporte cuando las tengas.

@@ -1,0 +1,21 @@
+# Entorno genérico (Linux/macOS). En Windows usar scripts/setup_env_windows.ps1
+# y requirements-train-windows.txt (PyTorch CPU o CUDA aparte).
+torch
+transformers>=4.40.0
+datasets>=2.18.0
+peft
+trl
+accelerate
+sentencepiece
+huggingface_hub
+tqdm
+jsonlines
+pandas
+google-genai
+
+# Opcionales según fase0
+# unsloth
+# bitsandbytes  # o bitsandbytes-rocm en AMD
+# wandb
+# evaluate
+# rouge_score
