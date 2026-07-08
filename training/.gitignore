@@ -19,6 +19,7 @@ evals/*.csv
 # Config local
 config/paths.json
 config/ollama.json
+config/stackexchange.json
 
 # Python
 __pycache__/

@@ -32,16 +32,44 @@ def _parse_json_array(raw: str) -> list[dict]:
             p = part.strip()
             if p.startswith("json"):
                 p = p[4:].strip()
-            if p.startswith("["):
+            if p.startswith(("[", "{")):
                 s = p
                 break
+    candidates: list = []
     m = re.search(r"\[.*\]", s, re.DOTALL)
-    if not m:
-        raise ValueError("sin array JSON")
-    data = json.loads(m.group(0))
-    if isinstance(data, dict):
-        return [data]
-    return data
+    if m:
+        try:
+            candidates.append(json.loads(m.group(0)))
+        except json.JSONDecodeError:
+            pass
+    if s.startswith("{"):
+        try:
+            candidates.append(json.loads(s))
+        except json.JSONDecodeError:
+            pass
+    pairs: list[dict] = []
+    for data in candidates:
+        items = data if isinstance(data, list) else [data]
+        for item in items:
+            if isinstance(item, dict) and "question" in item and "answer" in item:
+                pairs.append(item)
+    if pairs:
+        return pairs
+    # Fallback: extraer question/answer con regex si el JSON viene mal cerrado
+    qm = re.search(r'"question"\s*:\s*"((?:[^"\\]|\\.)*)"', s, re.DOTALL)
+    am = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)"', s, re.DOTALL)
+    if qm and am:
+        return [
+            {
+                "question": json.loads(f'"{qm.group(1)}"'),
+                "answer": json.loads(f'"{am.group(1)}"'),
+            }
+        ]
+    raise ValueError("sin array JSON")
+
+
+def _save_rows(path: Path, rows: list[dict]) -> None:
+    path.write_text(json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def ask_ollama(host: str, model: str, prompt: str, system: str, think: bool, timeout: int) -> str:
@@ -52,11 +80,27 @@ def ask_ollama(host: str, model: str, prompt: str, system: str, think: bool, tim
         "system": system,
         "stream": False,
         "think": think,
-        "options": {"temperature": 0.5, "num_predict": 1200},
+        "format": "json",
+        "options": {"temperature": 0.3, "num_predict": 2000},
     }
     r = requests.post(url, json=payload, timeout=timeout)
     r.raise_for_status()
     return (r.json() or {}).get("response", "") or ""
+
+
+_SKIP_CHUNK_RE = re.compile(
+    r"(all rights reserved|isbn\s+\d|blackmagic design|www\.blackmagicdesign\.com|"
+    r"table of contents|índice|indice\b|notice of rights)",
+    re.IGNORECASE,
+)
+
+
+def is_usable_chunk(text: str) -> bool:
+    """Evita portadas, copyright e índices con poco contenido técnico."""
+    if len(text.strip()) < 400:
+        return False
+    hits = len(_SKIP_CHUNK_RE.findall(text[:1200]))
+    return hits < 2
 
 
 def chunk_text(text: str, max_chars: int, overlap: int) -> list[str]:
@@ -91,6 +135,12 @@ def main() -> int:
     ap.add_argument("--sleep", type=float, default=0.5)
     ap.add_argument("--think", action="store_true")
     ap.add_argument("--append", action="store_true")
+    ap.add_argument(
+        "--skip-chunks",
+        type=int,
+        default=0,
+        help="Saltar los primeros N fragmentos (reanudar tras fallo)",
+    )
     args = ap.parse_args()
 
     root = training_root()
@@ -109,7 +159,7 @@ def main() -> int:
             "Fragmento de manual PDF de DaVinci Resolve (solo referencia; "
             "no inventes pasos que no aparezcan aquí)"
         )
-        ingest_hint = "ingest_pdf_manual.py (data/raw/pdf/*.pdf)"
+        ingest_hint = "ingest_pdf_manual.py (fuentesTrainning/*.pdf)"
 
     if not txt_dir.is_dir() or not any(txt_dir.glob("*.txt")):
         print("No hay .txt en", txt_dir, f"— ejecuta antes {ingest_hint}", file=sys.stderr)
@@ -124,15 +174,18 @@ def main() -> int:
     for path in sorted(txt_dir.glob("*.txt")):
         body = path.read_text(encoding="utf-8", errors="ignore")
         for ch in chunk_text(body, args.chunk_size, args.overlap):
-            all_chunks.append((path.name, ch))
+            if is_usable_chunk(ch):
+                all_chunks.append((path.name, ch))
 
     if args.max_chunks > 0:
         all_chunks = all_chunks[: args.max_chunks]
+    if args.skip_chunks > 0:
+        all_chunks = all_chunks[args.skip_chunks :]
 
     out_path = root / "data" / "raw" / "synthetic" / out_name
     out_path.parent.mkdir(parents=True, exist_ok=True)
     rows: list[dict] = []
-    if args.append and out_path.is_file():
+    if (args.append or args.skip_chunks > 0) and out_path.is_file():
         rows = json.loads(out_path.read_text(encoding="utf-8"))
 
     prompt_tpl = """{title}:
@@ -141,9 +194,9 @@ def main() -> int:
 ---
 
 Genera exactamente 1 par pregunta-respuesta técnica en español sobre DaVinci Resolve basado en este fragmento.
-Responde SOLO con este JSON (un elemento en el array, sin markdown ni texto extra):
-[{{"question":"...","answer":"..."}}]
-Usa comillas dobles JSON válidas (escapa comillas internas con \\")."""
+Responde SOLO con este JSON (objeto, sin markdown ni texto extra):
+{{"question":"...","answer":"..."}}
+La respuesta debe tener pasos concretos (mínimo 3 frases). Usa comillas dobles JSON válidas."""
 
     desc = "Manual Resolve->Q&A" if args.corpus == "resolve" else "PDF Resolve->Q&A"
     for fname, chunk in tqdm(all_chunks, desc=desc):
@@ -154,24 +207,28 @@ Usa comillas dobles JSON válidas (escapa comillas internas con \\")."""
             )
             pairs = _parse_json_array(raw)
             for pair in pairs:
+                if not isinstance(pair, dict):
+                    continue
                 q = pair.get("question")
                 a = pair.get("answer")
                 if isinstance(q, str) and isinstance(a, str) and len(q) > 15 and len(a) > 60:
                     rows.append(
                         {
+                            "source_file": fname,
                             "conversations": [
                                 {"from": "system", "value": RESOLVE_SYSTEM},
                                 {"from": "human", "value": q.strip()},
-                                {"from": "gpt", "value": f"[Fuente: {fname}]\n{a.strip()}"},
-                            ]
+                                {"from": "gpt", "value": a.strip()},
+                            ],
                         }
                     )
-        except (requests.RequestException, ValueError, json.JSONDecodeError, KeyError) as e:
+                    _save_rows(out_path, rows)
+        except (requests.RequestException, ValueError, json.JSONDecodeError, KeyError, AttributeError) as e:
             tqdm.write(f"Saltado {fname}: {e}")
         if args.sleep > 0:
             time.sleep(args.sleep)
 
-    out_path.write_text(json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8")
+    _save_rows(out_path, rows)
     print(f"Guardado {len(rows)} conversaciones en {out_path}")
     return 0
 

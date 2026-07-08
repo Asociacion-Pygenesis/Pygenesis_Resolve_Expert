@@ -1,5 +1,5 @@
 """
-Extrae texto de PDFs en data/raw/pdf/ → data/processed/resolve-pdf-txt/*.txt
+Extrae texto de PDFs en fuentesTrainning/ → data/processed/resolve-pdf-txt/*.txt
 
 Un .txt por PDF (todas las páginas concatenadas). Luego:
   python scripts/generate_qa_from_manual.py --corpus resolve_pdf ...
@@ -20,7 +20,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from _training_paths import training_root
+from _training_paths import pdf_sources_dir, training_root
 
 
 def _slug(name: str) -> str:
@@ -55,7 +55,7 @@ def main() -> int:
         "--pdf-dir",
         type=Path,
         default=None,
-        help="Carpeta con .pdf (default: data/raw/pdf)",
+        help="Carpeta con .pdf (default: fuentesTrainning/)",
     )
     ap.add_argument(
         "--out-txt-dir",
@@ -73,7 +73,7 @@ def main() -> int:
     args = ap.parse_args()
 
     root = training_root()
-    pdf_dir = (args.pdf_dir or (root / "data" / "raw" / "pdf")).resolve()
+    pdf_dir = (args.pdf_dir or pdf_sources_dir()).resolve()
     out_dir = (args.out_txt_dir or (root / "data" / "processed" / "resolve-pdf-txt")).resolve()
 
     if not pdf_dir.is_dir():
