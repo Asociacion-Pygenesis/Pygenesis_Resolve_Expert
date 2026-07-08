@@ -1,0 +1,37 @@
+{
+  "api_key": "",
+  "_comment_api_key": "Opcional. Regístrate en https://stackapps.com/apps/oauth/register para 10.000 req/día (sin key: ~300/día). Copia a stackexchange.json.",
+  "sites": [
+  ],
+  "sources": [
+    {
+      "site": "video",
+      "tagged": "davinci-resolve",
+      "_note": "Video Production SE — principal fuente (~242 preguntas)"
+    },
+    {
+      "site": "video",
+      "tagged": "fusion",
+      "keywords": ["resolve", "davinci"]
+    },
+    {
+      "site": "video",
+      "tagged": "color-grading",
+      "keywords": ["resolve", "davinci"]
+    },
+    {
+      "site": "stackoverflow",
+      "tagged": "davinci-resolve"
+    },
+    {
+      "site": "stackoverflow",
+      "tagged": "blackmagic-design"
+    }
+  ],
+  "min_question_score": 0,
+  "min_answer_score": 1,
+  "pagesize": 100,
+  "max_pages": 0,
+  "sleep_seconds": 0.35,
+  "output": "data/raw/stackoverflow/resolve_qa.json"
+}

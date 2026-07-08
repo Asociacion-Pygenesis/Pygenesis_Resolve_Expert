@@ -10,6 +10,11 @@ def training_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def pdf_sources_dir() -> Path:
+    """Carpeta con manuales PDF de Resolve (fuentesTrainning/)."""
+    return training_root() / "fuentesTrainning"
+
+
 def load_json_config(name: str) -> dict:
     root = training_root()
     for fname in (name, name.replace(".json", ".example.json")):

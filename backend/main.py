@@ -14,6 +14,13 @@ from sentence_transformers import SentenceTransformer
 
 from response_filters import limpiar_respuesta_modelo
 
+import sys
+
+_TRAINING_SCRIPTS = Path(__file__).resolve().parents[1] / "training" / "scripts"
+if str(_TRAINING_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_TRAINING_SCRIPTS))
+from _resolve_system import RESOLVE_SYSTEM  # noqa: E402
+
 app = FastAPI(title="Pygenesis ResolveExpert AI Backend")
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
@@ -65,13 +72,10 @@ def buscar_contexto(pregunta: str, top_k: int = 3) -> list:
 
 
 def construir_prompt(consulta: Consulta, contexto_rag: list) -> str:
-    system = """Eres Pygenesis ResolveExpert AI, asistente experto en DaVinci Resolve (edición, Color, Fusion, Fairlight y Deliver).
-
-Responde en español salvo que pidan otro idioma. Usa JSON solo si lo piden explícitamente.
-Si no sabes algo, dilo sin inventar.
-
-No cites fuentes ni añadas prefijos tipo [Fuente: ...].
-No añadas cierres tipo "En resumen" ni repitas tu rol."""
+    system = (
+        RESOLVE_SYSTEM
+        + "\n\nNo cites fuentes ni añadas prefijos tipo [Fuente: ...]."
+    )
 
     im_end = "<|" + "im_end|>"
     prompt = f"<|im_start|>system\n{system}{im_end}\n"
