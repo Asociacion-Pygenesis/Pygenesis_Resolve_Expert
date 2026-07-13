@@ -57,39 +57,54 @@ else:
 
 ## Celda 1 — Instalar dependencias (versiones fijas)
 
-> Tipo de celda: **Código**. Tras instalar, no reinicies el runtime salvo error de Triton.
+> Tipo de celda: **Código**. **No importes nada al final.** Tras ejecutarla, **reinicia el runtime** (obligatorio).
 
 ```python
-# Colab (Python 3.12) trae Triton nuevo que rompe bitsandbytes antiguo (error: No module named 'triton.ops').
-!pip install -q -U pip
-!pip uninstall -y bitsandbytes 2>/dev/null || true
+import sys
 
-!pip install -q torch==2.4.1 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-!pip install -q transformers==4.47.0 peft==0.13.2 datasets trl==0.12.0 bitsandbytes==0.45.5 accelerate==1.2.1 sentencepiece
+# Desinstalar paquetes preinstalados de Colab que chocan con el stack de entrenamiento
+!{sys.executable} -m pip install -q -U pip
+!{sys.executable} -m pip uninstall -y torch torchvision torchaudio bitsandbytes transformers trl peft accelerate 2>/dev/null || true
 
-import bitsandbytes as bnb
-import transformers
-print(f"bitsandbytes {bnb.__version__} | transformers {transformers.__version__}")
+!{sys.executable} -m pip install -q torch==2.4.1 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+!{sys.executable} -m pip install -q transformers==4.47.0 peft==0.13.2 datasets trl==0.12.0 bitsandbytes==0.45.5 accelerate==1.2.1 sentencepiece
+
+print("=" * 60)
+print("✅ Paquetes instalados.")
+print("⚠️  OBLIGATORIO: menú Runtime → Restart session")
+print("    Luego ejecuta la Celda 1b (NO repitas la 0 ni la 1).")
+print("=" * 60)
 ```
 
-**Si en la celda 2 ves `No module named 'triton.ops'`:**  
-`Runtime → Disconnect and delete runtime` → repite **celda 0 → 1 → 2** (sin saltar la 1).
+**Por qué el reinicio:** si ejecutaste la celda 0 antes, PyTorch antiguo queda cargado en RAM. Instalar otra versión con `pip` sin reiniciar provoca errores como `GuardSource has no attribute LOCAL_NN_MODULE` al importar `bitsandbytes`.
+
+El aviso de `gradio` vs `huggingface-hub` es **inofensivo** (Colab trae Gradio; este notebook no lo usa).
 
 ---
 
-## Celda 1b — Verificar bitsandbytes (opcional)
+## Celda 1b — Verificar entorno (después del reinicio)
 
-> Tipo de celda: **Código**. Solo si quieres confirmar antes de cargar el modelo.
+> Tipo de celda: **Código**. Ejecutar **solo tras** `Runtime → Restart session`.
 
 ```python
-from transformers import BitsAndBytesConfig
-import bitsandbytes as bnb
 import torch
+import bitsandbytes as bnb
+import transformers
+from transformers import BitsAndBytesConfig
 
-print("✅ bitsandbytes", bnb.__version__)
+if not torch.cuda.is_available():
+    raise SystemExit("❌ Sin GPU — Runtime → Change runtime type → T4 GPU")
+
+print(f"✅ GPU: {torch.cuda.get_device_name(0)}")
+print(f"   VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+print(f"✅ torch {torch.__version__}")
+print(f"✅ bitsandbytes {bnb.__version__} | transformers {transformers.__version__}")
+
 _ = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
-print("✅ BitsAndBytesConfig OK")
+print("✅ BitsAndBytesConfig OK — continúa con la Celda 2")
 ```
+
+**Si falla aquí con `triton.ops`:** `Runtime → Disconnect and delete runtime` → celda 0 → celda 1 → **reiniciar** → celda 1b.
 
 ---
 
@@ -342,8 +357,8 @@ print("Descarga iniciada (~100–150 MB)")
 cd C:\Users\navar\PycharmProjects\Pygenesis_ResolveExpert
 python conversion\fusionar.py
 
-# 3. Convertir a GGUF y registrar en Ollama (ver guia_finetuning_resolve.md §6–7)
-ollama create pygenesis-resolve -f Modelfile
+# 3. GGUF + Ollama (script automatizado)
+.\conversion\convertir_gguf.ps1 -RemoveF16After -OllamaCreate
 ```
 
 Guía completa post-Colab: [`../../guia_finetuning_resolve.md`](../../guia_finetuning_resolve.md) (secciones 6–9).
@@ -354,7 +369,9 @@ Guía completa post-Colab: [`../../guia_finetuning_resolve.md`](../../guia_finet
 
 | Error | Solución |
 |-------|----------|
-| `No module named 'triton.ops'` | Reiniciar runtime; repetir celdas 0 → 1 → 2 |
+| `GuardSource ... LOCAL_NN_MODULE` al importar bnb | Ejecutaste imports en celda 1 sin reiniciar → **Runtime → Restart session** → celda **1b** |
+| `No module named 'triton.ops'` | Reiniciar runtime; repetir 0 → 1 → reiniciar → 1b |
+| Aviso `gradio` / `huggingface-hub` | Ignorar (no usamos Gradio en este notebook) |
 | `CUDA out of memory` | `max_seq_length=384` o modelo 3B |
 | `401` / `403` en HuggingFace | Revisa `HF_TOKEN` en Secrets y licencia del modelo |
 | `resolve_train.json` not found | Repite celda 3; comprueba `!ls /content/*.json` |
@@ -367,7 +384,7 @@ Guía completa post-Colab: [`../../guia_finetuning_resolve.md`](../../guia_finet
 - [ ] `colab_dataset.zip` generado en el PC
 - [ ] Runtime T4 activo
 - [ ] Secret `HF_TOKEN` configurado
-- [ ] Celdas 0–8 ejecutadas sin error
+- [ ] Celdas 0 → 1 → **reinicio** → 1b → 2–8 ejecutadas sin error
 - [ ] `qwen-coder-resolve-lora.zip` descargado
 - [ ] `fusionar.py` ejecutado en el PC
 - [ ] Modelo probado con `ollama run pygenesis-resolve`

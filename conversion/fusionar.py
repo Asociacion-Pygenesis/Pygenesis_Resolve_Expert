@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import sys
 from pathlib import Path
 
@@ -57,6 +59,25 @@ def find_lora_path(explicit: str | None) -> Path:
     )
 
 
+def read_base_model(lora_path: Path, fallback: str) -> str:
+    cfg_path = lora_path / "adapter_config.json"
+    if cfg_path.is_file():
+        with open(cfg_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        base = (cfg.get("base_model_name_or_path") or "").strip()
+        if base:
+            return base
+    return fallback
+
+
+def hf_token() -> str | None:
+    for key in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+        val = (os.environ.get(key) or "").strip()
+        if val:
+            return val
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fusiona LoRA + Qwen base.")
     parser.add_argument(
@@ -77,29 +98,41 @@ def main() -> int:
     args = parser.parse_args()
 
     lora_path = find_lora_path(args.lora_path)
+    base_model_name = read_base_model(lora_path, args.model)
     output_path = (
         Path(args.output).expanduser().resolve()
         if args.output
         else repo_root() / "qwen-resolve-merged"
     )
+    token = hf_token()
 
     print(f"Adaptador LoRA: {lora_path}")
-    print(f"Modelo base:    {args.model}")
+    print(f"Modelo base:    {base_model_name}")
     print(f"Salida:         {output_path}")
+    if token:
+        print("HF token:       (desde entorno)")
+    else:
+        print("HF token:       no configurado (necesario si el modelo base es gated)")
 
-    print("Cargando modelo base...")
-    base_model = AutoModelForCausalLM.from_pretrained(
-        args.model,
-        dtype=torch.float16,
-        device_map="cpu",
-        trust_remote_code=True,
+    print("Cargando modelo base en CPU (varios minutos, ~14 GB RAM)...")
+    load_kwargs: dict = {
+        "torch_dtype": torch.float16,
+        "device_map": "cpu",
+        "trust_remote_code": True,
+        "low_cpu_mem_usage": True,
+    }
+    if token:
+        load_kwargs["token"] = token
+
+    base_model = AutoModelForCausalLM.from_pretrained(base_model_name, **load_kwargs)
+    tokenizer = AutoTokenizer.from_pretrained(
+        base_model_name, trust_remote_code=True, token=token
     )
-    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
 
     print("Fusionando LoRA...")
     merged = PeftModel.from_pretrained(base_model, str(lora_path))
     merged = merged.merge_and_unload()
-    merged.save_pretrained(output_path)
+    merged.save_pretrained(output_path, safe_serialization=True)
     tokenizer.save_pretrained(output_path)
 
     print(f"Listo en {output_path}")
