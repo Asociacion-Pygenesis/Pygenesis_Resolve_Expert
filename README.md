@@ -14,7 +14,8 @@ Proyecto **hermano** de Pygenesis AI (Unity): no comparte datos ni pesos del mod
 | [`Fases/`](Fases/) | Guías por fases (entorno, dataset, fine-tuning) |
 | [`Agentes/`](Agentes/) | Roles (editor, colorista, Fusion, Fairlight, Deliver) |
 | [`conversion/`](conversion/) | Fusión LoRA + base Qwen |
-| [`backend/`](backend/) | FastAPI + Ollama (opcional, RAG futuro) |
+| [`backend/`](backend/) | Puente de inferencia FastAPI (plugin → GGUF local con llama-cpp-python) |
+| [`plugin/`](plugin/) | Workflow Integration Plugin para Resolve Studio |
 
 ---
 
@@ -53,3 +54,16 @@ ollama create pygenesis-resolve -f Modelfile
 ```
 
 Prueba: `python test_resolve.py`
+
+---
+
+## Plugin en Resolve Studio
+
+```powershell
+Set-Location "C:\Users\navar\PycharmProjects\Pygenesis_ResolveExpert\plugin\scripts"
+.\install_plugin.ps1
+```
+
+Luego en Resolve: **Workspace → Workflow Integrations → Pygenesis Resolve Tutor**.
+
+Guía: [`plugin/README.md`](plugin/README.md) · Roadmap: [`RoadmapCreacionPlugin.md`](RoadmapCreacionPlugin.md)

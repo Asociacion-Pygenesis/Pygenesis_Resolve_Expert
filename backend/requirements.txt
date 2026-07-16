@@ -1,0 +1,14 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.0
+
+# Motor de inferencia (instalar wheel según GPU con install_inference.ps1)
+# llama-cpp-python
+
+# RAG opcional (si existe backend/vectorstore/)
+sentence-transformers>=2.2
+faiss-cpu>=1.7
+numpy>=1.24
+
+# Descarga de modelo desde Hugging Face (instalador)
+huggingface-hub>=0.23

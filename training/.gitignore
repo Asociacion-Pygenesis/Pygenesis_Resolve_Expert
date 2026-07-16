@@ -5,6 +5,7 @@ data/train/*.json
 data/eval/*.json
 !data/train/.gitkeep
 !data/eval/.gitkeep
+data/colab_dataset.zip
 
 models/checkpoints/
 models/lora-adapters/

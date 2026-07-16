@@ -51,11 +51,41 @@ env/
 wandb/
 mlruns/
 
-# --- Pesos grandes (GGUF suele ir en models/gguf; training/.gitignore detalla el resto) ---
+# --- Pesos, modelos y artefactos grandes (no versionar) ---
+# GGUF (Ollama / llama.cpp)
 *.gguf
+
+# HuggingFace merged / safetensors
+*.safetensors
+*.safetensors.index.json
+
+# Cuantización y binarios de modelo
+*.bin
+!**/.gitkeep
+
+# Carpetas típicas del pipeline ResolveExpert
 modelos/
 qwen-resolve-merged/
+qwen-coder-resolve/
+qwen-coder-resolve-lora/
+pygenesis-resolve-merged/
 llama.cpp/
+
+# Checkpoints y adaptadores (Colab o entrenamiento local)
+**/checkpoints/
+**/lora-adapters/
+
+# Logs de conversión / scripts pesados
+conversion/*.log
+
+# Caché HuggingFace si se crea dentro del repo
+.cache/
+huggingface/
 
 # --- Proyectos Resolve locales ---
 *.drp
+
+# --- Plugin Resolve (binario del SDK, no versionar) ---
+**/WorkflowIntegration.node
+plugin/**/node_modules/
+companion/**/node_modules/

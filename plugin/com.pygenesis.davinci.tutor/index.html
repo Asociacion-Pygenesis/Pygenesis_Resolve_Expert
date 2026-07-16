@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pygenesis Resolve Tutor</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-main">
+        <h1>Pygenesis Resolve Tutor</h1>
+        <p class="subtitle">Asistente didáctico para DaVinci Resolve</p>
+      </div>
+      <div id="resolve-indicator" class="indicator indicator-pending" title="Estado de Resolve">
+        Resolve
+      </div>
+    </header>
+
+    <div id="resolve-context-bar" class="context-bar" title="Contexto enviado al modelo">
+      <span id="resolve-context-text">Contexto: —</span>
+      <span id="resolve-context-notice" class="context-notice hidden" role="status"></span>
+    </div>
+
+    <div id="connection-banner" class="connection-banner hidden" role="alert">
+      <span id="connection-banner-text">Puente de inferencia no disponible en localhost:8000</span>
+      <button type="button" id="connection-retry" class="banner-btn">Reintentar</button>
+    </div>
+
+    <main id="chat-messages" class="chat-messages" aria-live="polite">
+      <div class="message message-assistant welcome">
+        <div class="message-label">Pygenesis</div>
+        <div class="message-body markdown-body">
+          <p>Hola. Pregúntame sobre edición, Color, Fusion, Fairlight o Deliver en DaVinci Resolve.</p>
+          <p><em>Ejemplo:</em> ¿Cómo activo proxies para editar material 4K?</p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="chat-input-area">
+      <textarea
+        id="user-input"
+        class="chat-input"
+        rows="2"
+        placeholder="Escribe tu pregunta sobre Resolve…"
+        aria-label="Mensaje para el tutor"
+      ></textarea>
+      <button type="button" id="send-btn" class="send-btn" disabled>
+        Enviar
+      </button>
+    </footer>
+
+    <div class="status-bar">
+      <span id="model-status">Puente: localhost:8000</span>
+      <span id="plugin-version">v0.3.2</span>
+    </div>
+  </div>
+
+  <script src="js/vendor/marked.min.js"></script>
+  <script src="js/resolve-context.js"></script>
+  <script src="js/chat-api.js"></script>
+  <script src="js/chat-ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

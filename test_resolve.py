@@ -1,30 +1,37 @@
+"""Prueba rápida del puente de inferencia (sin Ollama)."""
+
+from __future__ import annotations
+
 import httpx
 
-from backend.response_filters import limpiar_respuesta_modelo
+BRIDGE_URL = "http://localhost:8000"
 
 
-def consultar_sin_thinking(prompt: str) -> str:
+def consultar_puente(prompt: str, contexto_proyecto: str = "") -> str:
     response = httpx.post(
-        "http://localhost:11434/api/generate",
+        f"{BRIDGE_URL}/consultar",
         json={
-            "model": "pygenesis-resolve",
             "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.2,
-                "top_p": 0.95,
-                "top_k": 20,
-                "presence_penalty": 1.5,
-            },
+            "contexto_proyecto": contexto_proyecto,
+            "modo_json": False,
         },
-        timeout=120,
+        timeout=300,
     )
-    data = response.json()
-    return limpiar_respuesta_modelo(data.get("response", ""))
+    response.raise_for_status()
+    return response.json().get("respuesta", "")
 
 
 if __name__ == "__main__":
-    respuesta = consultar_sin_thinking(
+    health = httpx.get(f"{BRIDGE_URL}/health", timeout=5).json()
+    print("Health:", health)
+
+    if not health.get("model_loaded"):
+        raise SystemExit(
+            "Modelo no cargado. Ejecuta installer\\install_pygenesis.ps1 "
+            "o coloca pygenesis-resolve-q4km.gguf en %LOCALAPPDATA%\\Pygenesis\\models\\"
+        )
+
+    respuesta = consultar_puente(
         "¿Cómo configuro proxies en DaVinci Resolve para editar material 4K?"
     )
     print("\n--- RESPUESTA FINAL ---")
