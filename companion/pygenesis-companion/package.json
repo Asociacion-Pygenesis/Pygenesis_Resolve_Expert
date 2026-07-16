@@ -1,0 +1,13 @@
+{
+  "name": "pygenesis-companion",
+  "version": "0.1.0",
+  "description": "Pygenesis Companion — asistente flotante para DaVinci Resolve Free",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}

@@ -88,3 +88,4 @@ huggingface/
 # --- Plugin Resolve (binario del SDK, no versionar) ---
 **/WorkflowIntegration.node
 plugin/**/node_modules/
+companion/**/node_modules/

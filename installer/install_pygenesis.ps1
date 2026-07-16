@@ -18,15 +18,20 @@
 .PARAMETER SkipPlugin
   Solo instala puente + modelo
 
+.PARAMETER SkipCompanion
+  No instala la app Companion (Resolve Free)
+
 .EXAMPLE
   .\install_pygenesis.ps1
   .\install_pygenesis.ps1 -Backend vulkan
+  .\install_pygenesis.ps1 -SkipPlugin
 #>
 param(
     [ValidateSet("auto", "cuda", "vulkan", "cpu")]
     [string]$Backend = "auto",
     [switch]$SkipModelDownload,
-    [switch]$SkipPlugin
+    [switch]$SkipPlugin,
+    [switch]$SkipCompanion
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,6 +39,7 @@ $InstallerRoot = $PSScriptRoot
 $RepoRoot = Split-Path $InstallerRoot -Parent
 $BackendScripts = Join-Path $RepoRoot "backend\scripts"
 $PluginScripts = Join-Path $RepoRoot "plugin\scripts"
+$CompanionScripts = Join-Path $RepoRoot "companion\scripts"
 $VenvPython = Join-Path $RepoRoot "training\.venv\Scripts\python.exe"
 $ModelSourcePath = Join-Path $InstallerRoot "model.source.json"
 
@@ -124,16 +130,26 @@ if (-not $SkipModelDownload) {
 
 if (-not $SkipPlugin) {
     Write-Host ""
-    Write-Host "[3/4] Plugin Resolve..." -ForegroundColor Cyan
+    Write-Host "[3/5] Plugin Resolve (Studio)..." -ForegroundColor Cyan
     & (Join-Path $PluginScripts "install_plugin.ps1") -Force
     if ($LASTEXITCODE -ne 0) { exit 1 }
 } else {
     Write-Host ""
-    Write-Host "[3/4] Plugin omitido (-SkipPlugin)" -ForegroundColor Yellow
+    Write-Host "[3/5] Plugin omitido (-SkipPlugin)" -ForegroundColor Yellow
+}
+
+if (-not $SkipCompanion) {
+    Write-Host ""
+    Write-Host "[4/5] Companion (Resolve Free)..." -ForegroundColor Cyan
+    & (Join-Path $CompanionScripts "install_companion.ps1")
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+} else {
+    Write-Host ""
+    Write-Host "[4/5] Companion omitido (-SkipCompanion)" -ForegroundColor Yellow
 }
 
 Write-Host ""
-Write-Host "[4/4] Verificación..." -ForegroundColor Cyan
+Write-Host "[5/5] Verificación..." -ForegroundColor Cyan
 $detected = & (Join-Path $BackendScripts "detect_gpu.ps1")
 Write-Host "  Backend GPU : $($detected.Backend) ($($detected.GpuName))" -ForegroundColor DarkGray
 Write-Host "  Config      : $env:LOCALAPPDATA\Pygenesis\bridge.env" -ForegroundColor DarkGray
@@ -141,4 +157,6 @@ Write-Host ""
 Write-Host "Siguiente paso:" -ForegroundColor Green
 Write-Host "  cd backend"
 Write-Host "  .\start_backend.ps1"
-Write-Host "  Abre Resolve → Workspace → Workflow Integrations → Pygenesis Resolve Tutor"
+Write-Host ""
+Write-Host "  Resolve Studio → Workspace → Workflow Integrations → Pygenesis Resolve Tutor"
+Write-Host "  Resolve Free   → companion\scripts\start_companion.ps1"
