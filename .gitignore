@@ -84,3 +84,7 @@ huggingface/
 
 # --- Proyectos Resolve locales ---
 *.drp
+
+# --- Plugin Resolve (binario del SDK, no versionar) ---
+**/WorkflowIntegration.node
+plugin/**/node_modules/

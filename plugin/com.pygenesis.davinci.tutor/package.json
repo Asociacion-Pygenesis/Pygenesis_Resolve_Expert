@@ -1,0 +1,6 @@
+{
+  "name": "pygenesis-resolve-tutor",
+  "version": "0.3.0",
+  "description": "Pygenesis Resolve Tutor - Workflow Integration Plugin",
+  "main": "main.js"
+}
