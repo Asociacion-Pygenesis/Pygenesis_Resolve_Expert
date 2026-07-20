@@ -1,72 +1,81 @@
-# Pygenesis ResolveExpert AI
+# Pygenesis ResolveExpert
 
-Asistente **DaVinci Resolve** para postproducción: plugin Studio, Companion (Free) y modelo GGUF local.
+Local AI assistant for **DaVinci Resolve** (Edit, Color, Fusion, Fairlight, Deliver).
 
-Modelo en Hugging Face: [`SuNavar/Pygenesis_ResolveExpert`](https://huggingface.co/SuNavar/Pygenesis_ResolveExpert).
+| Edition | How you use it |
+|---------|----------------|
+| **Resolve Studio** | In-app plugin: `Workspace → Workflow Integrations → Pygenesis Resolve Tutor` |
+| **Resolve Free** | [Pygenesis Companion](companion/README.md) (floating chat app) |
 
----
+Same model in both cases. Studio can pass page/project/timeline context automatically; Free uses manual context in Companion.
 
-## Instalación (usuario)
-
-Requisitos: Windows 10/11, Python 3.10+ en PATH, Internet (descarga del GGUF).
-
-1. Abre **Pygenesis Companion** (`.exe` del release o `npm start` en desarrollo).
-2. La app indica que falta e **Instalar lo que falta** (modelo desde Hugging Face, runtime, plugin).
-3. Arranca el puente desde la misma pantalla y entra al chat.
-4. **Studio:** `Workspace → Workflow Integrations → Pygenesis Resolve Tutor`  
-   **Free:** usa el chat de Companion (contexto manual).
-
-Alternativa sin GUI: doble clic en [`Install.bat`](Install.bat).
-
-Guía: [`installer/README.md`](installer/README.md) · Companion: [`companion/README.md`](companion/README.md).
+**Español:** [README.es.md](README.es.md)
 
 ---
 
-## Estructura
+## Quick start (end users)
 
-| Carpeta | Contenido |
-|---------|-----------|
-| [`installer/`](installer/) | Instalador cerrado (`Install.bat`), fuente HF, `build_release.ps1` |
-| [`backend/`](backend/) | Puente FastAPI + `llama-cpp-python` (GGUF) |
-| [`plugin/`](plugin/) | Workflow Integration Plugin (Resolve Studio) |
-| [`companion/`](companion/) | Pygenesis Companion (Resolve Free / Electron) |
-| [`training/`](training/) | Dataset y pipeline de entrenamiento (solo desarrollo) |
-| [`conversion/`](conversion/) | Fusión LoRA → GGUF (solo desarrollo) |
-| [`Fases/`](Fases/) / [`Agentes/`](Agentes/) | Guías y roles de dominio |
+**Requirements:** Windows 10/11, [Python 3.10+](https://www.python.org/downloads/) on PATH, internet (first model download).
+
+1. Download **Pygenesis Companion** from [GitHub Releases](https://github.com/Asociacion-Pygenesis/Pygenesis_Resolve_Expert/releases).
+2. Run the portable `.exe`.
+3. Click **Install what’s missing** (runtime, GGUF from Hugging Face, Studio plugin).
+4. **Start bridge** → **Continue to chat**.
+
+The GGUF weights are **not** in this repo. They download from Hugging Face:
+
+[`SuNavar/Pygenesis_ResolveExpert`](https://huggingface.co/SuNavar/Pygenesis_ResolveExpert)
+
+Alternative (no GUI): clone this repo and run [`Install.bat`](Install.bat).
 
 ---
 
-## Desarrollo
+## Repository layout
+
+| Path | Role |
+|------|------|
+| [`installer/`](installer/) | Closed installer (`Install.bat`), HF model source, release scripts |
+| [`backend/`](backend/) | Local FastAPI bridge + `llama-cpp-python` (GGUF) |
+| [`plugin/`](plugin/) | Workflow Integration plugin (Resolve Studio) |
+| [`companion/`](companion/) | Electron Companion + setup wizard |
+| [`training/`](training/) | Dataset / fine-tuning (developers only) |
+| [`conversion/`](conversion/) | LoRA → GGUF (developers only) |
+
+---
+
+## Developers
 
 ```powershell
+# Optional: training venv
 Set-Location training
 .\scripts\setup_env_windows.ps1
-```
 
-Fine-tuning: [`guia_finetuning_resolve.md`](guia_finetuning_resolve.md).
-
-Instalación en modo desarrollo (sin ZIP):
-
-```powershell
-.\installer\install_pygenesis.ps1
-# o
+# Install runtime + model + plugin from sources
 .\Install.bat
+
+# Companion in dev mode
+Set-Location companion\pygenesis-companion
+npm install
+npm start
+
+# Build portable .exe
+npm run build
 ```
 
-Generar paquete para GitHub Releases:
-
-```powershell
-.\installer\build_release.ps1
-```
+Release packaging: [`installer/build_release.ps1`](installer/build_release.ps1) · publish helpers: [`installer/publish_release.ps1`](installer/publish_release.ps1)
 
 ---
 
-## Documentación
+## Privacy & license
 
-| Recurso | Descripción |
-|---------|-------------|
-| [`installer/README.md`](installer/README.md) | Instalación end-user y build de release |
-| [`plugin/README.md`](plugin/README.md) | Plugin Studio |
-| [`companion/README.md`](companion/README.md) | Companion Free |
-| [`RoadmapCreacionPlugin.md`](RoadmapCreacionPlugin.md) | Roadmap del plugin |
-| [`HUGGINGFACE_MODEL_DESCRIPTION.md`](HUGGINGFACE_MODEL_DESCRIPTION.md) | Model card (HF) |
+Inference runs **on your machine**. No cloud chat API is required beyond downloading the model once.
+
+Licensed under [Apache-2.0](LICENSE).
+
+---
+
+## Links
+
+- Model: [Hugging Face — SuNavar/Pygenesis_ResolveExpert](https://huggingface.co/SuNavar/Pygenesis_ResolveExpert)
+- Releases: [GitHub Releases](https://github.com/Asociacion-Pygenesis/Pygenesis_Resolve_Expert/releases)
+- Association: [Asociacion-Pygenesis](https://github.com/Asociacion-Pygenesis)
