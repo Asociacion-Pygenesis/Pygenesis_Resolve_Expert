@@ -5,10 +5,10 @@
 
 .EXAMPLE
   .\installer\publish_github_release.ps1
-  .\installer\publish_github_release.ps1 -Tag v0.2.1
+  .\installer\publish_github_release.ps1 -Tag v0.2.2
 #>
 param(
-    [string]$Tag = "v0.2.1",
+    [string]$Tag = "v0.2.2",
     [string]$ExePath = "",
     [string]$Repo = "Asociacion-Pygenesis/Pygenesis_Resolve_Expert"
 )
@@ -16,7 +16,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 if (-not $ExePath) {
-    $ExePath = Join-Path $RepoRoot "companion\dist\Pygenesis-Companion-0.2.1-portable.exe"
+    $ExePath = Join-Path $RepoRoot "companion\dist\Pygenesis-Companion-0.2.2-portable.exe"
 }
 
 if (-not (Test-Path $ExePath)) {
@@ -40,7 +40,7 @@ Local DaVinci Resolve assistant with a **setup wizard** inside Companion (checks
 
 ### GPU
 - **NVIDIA:** CUDA wheels
-- **AMD:** full Vulkan SDK + VS Build Tools for GPU; without SDK the installer uses **CPU automatically** (VulkanRT alone is not enough)
+- **AMD:** full Vulkan SDK + VS Build Tools for GPU; without SDK (or if Windows MAX_PATH build fails) the installer uses **CPU automatically**. Vulkan builds use short TEMP ``C:\pgbuild``.
 
 ### Usage
 1. Run the portable ``.exe``

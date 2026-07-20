@@ -33,7 +33,7 @@ Alternative (no GUI): clone this repo and run [`Install.bat`](Install.bat).
 | Hardware | Installer behavior |
 |----------|-------------------|
 | **NVIDIA** | CUDA wheels (usually no local compile). |
-| **AMD Radeon** | GPU/Vulkan **only** with full [LunarG Vulkan SDK](https://vulkan.lunarg.com/sdk/home) (*SDK Installer*, **not** VulkanRT alone) + VS Build Tools (C++). Without SDK → **automatic CPU** (slower, but works). |
+| **AMD Radeon** | GPU/Vulkan **only** with full [LunarG Vulkan SDK](https://vulkan.lunarg.com/sdk/home) (*SDK Installer*, **not** VulkanRT alone) + VS Build Tools (C++). Without SDK → **automatic CPU**. If the SDK is installed but the Windows build fails (long paths / MAX_PATH), the installer also falls back to CPU. Uses short TEMP `C:\pgbuild` when compiling. |
 | No discrete GPU | CPU. |
 
 Guide: [`installer/README.md`](installer/README.md) · Companion: [`companion/README.md`](companion/README.md).

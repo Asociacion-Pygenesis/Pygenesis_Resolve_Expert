@@ -14,10 +14,10 @@ Instalador cerrado de **Pygenesis ResolveExpert** para Windows. El modelo GGUF s
 | Hardware | Que hace el instalador |
 |----------|------------------------|
 | **NVIDIA** | CUDA (wheels). Suele ir bien sin compilar. |
-| **AMD** | Vulkan/GPU **solo** con [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) completo (SDK Installer, **no** solo VulkanRT) + Visual Studio Build Tools (C++). Sin eso → **CPU automatico** (mas lento, pero usable). |
+| **AMD** | Vulkan/GPU **solo** con [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) completo (SDK Installer, **no** solo VulkanRT) + Visual Studio Build Tools (C++). Sin eso → **CPU automatico**. Si el SDK esta pero falla el build (MAX_PATH / C++), tambien CPU. |
 | Sin GPU | CPU. |
 
-No hace falta instalar el Vulkan SDK para usar Pygenesis: en portatiles AMD sin SDK la instalacion continua en CPU.
+No hace falta Vulkan SDK para usar Pygenesis. El build Vulkan usa TEMP corto `C:\pgbuild` para mitigar rutas largas en Windows.
 
 ## Instalacion en 1 clic (Companion .exe)
 

@@ -28,6 +28,7 @@ function Install-LlamaCpp {
         "cuda" {
             & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir `
                 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+            return $LASTEXITCODE
         }
         "vulkan" {
             $vulkanSdk = Resolve-VulkanSdkPath
@@ -37,6 +38,15 @@ function Install-LlamaCpp {
             }
 
             Write-Host "Vulkan SDK: $vulkanSdk" -ForegroundColor DarkGray
+            # pip + vendor/llama.cpp crea rutas enorme (svelte UI); en Windows falla sin TEMP corto.
+            $shortTemp = "C:\pgbuild"
+            New-Item -ItemType Directory -Force -Path $shortTemp | Out-Null
+            $prevTemp = $env:TEMP
+            $prevTmp = $env:TMP
+            $env:TEMP = $shortTemp
+            $env:TMP = $shortTemp
+            Write-Host "TEMP corto para build: $shortTemp (evita MAX_PATH en Windows)" -ForegroundColor DarkGray
+
             $vulkanSdkCmake = ($vulkanSdk -replace '\\', '/')
             $env:VULKAN_SDK = $vulkanSdk
             $env:Path = "$vulkanSdk\Bin;$env:Path"
@@ -44,6 +54,8 @@ function Install-LlamaCpp {
             $env:CMAKE_PREFIX_PATH = $vulkanSdkCmake
             $env:FORCE_CMAKE = "1"
 
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
             & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir
             $code = $LASTEXITCODE
 
@@ -52,9 +64,20 @@ function Install-LlamaCpp {
                 if ($LASTEXITCODE -eq 0) {
                     Write-Host "pip devolvio error pero llama_cpp importa OK; continuando." -ForegroundColor Yellow
                     $code = 0
+                } else {
+                    Write-Host ""
+                    Write-Host "Fallo al compilar llama-cpp-python con Vulkan." -ForegroundColor Yellow
+                    Write-Host "Causas frecuentes en Windows:" -ForegroundColor DarkGray
+                    Write-Host "  - Rutas demasiado largas (MAX_PATH) al descomprimir vendor/llama.cpp" -ForegroundColor DarkGray
+                    Write-Host "  - Falta VS Build Tools (C++)" -ForegroundColor DarkGray
+                    Write-Host "Opcional: activa rutas largas (admin) y reintenta:" -ForegroundColor DarkGray
+                    Write-Host "  New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force" -ForegroundColor DarkGray
                 }
             }
+            $ErrorActionPreference = $prevEap
 
+            if ($prevTemp) { $env:TEMP = $prevTemp } else { Remove-Item Env:TEMP -ErrorAction SilentlyContinue }
+            if ($prevTmp) { $env:TMP = $prevTmp } else { Remove-Item Env:TMP -ErrorAction SilentlyContinue }
             Remove-Item Env:CMAKE_ARGS -ErrorAction SilentlyContinue
             Remove-Item Env:CMAKE_PREFIX_PATH -ErrorAction SilentlyContinue
             Remove-Item Env:FORCE_CMAKE -ErrorAction SilentlyContinue
@@ -62,9 +85,9 @@ function Install-LlamaCpp {
         }
         default {
             & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir
+            return $LASTEXITCODE
         }
     }
-    return $LASTEXITCODE
 }
 
 function Resolve-VulkanSdkPath {
@@ -165,7 +188,7 @@ $exitCode = Install-LlamaCpp -TargetBackend $Backend
 if ($exitCode -ne 0 -and $Backend -eq "vulkan") {
     Write-Host ""
     Write-Host "Vulkan no se pudo compilar (SDK presente pero fallo el build)." -ForegroundColor Yellow
-    Write-Host "Revisa VS Build Tools (C++) y una PowerShell nueva con VULKAN_SDK en PATH." -ForegroundColor DarkGray
+    Write-Host "Revisa VS Build Tools (C++) y TEMP corto C:\pgbuild. En AMD es habitual caer a CPU." -ForegroundColor DarkGray
     if ($AllowCpuFallback) {
         Write-Host ""
         Write-Host "Fallback a CPU (wheel precompilado)..." -ForegroundColor Cyan
@@ -175,7 +198,7 @@ if ($exitCode -ne 0 -and $Backend -eq "vulkan") {
         Write-Host ""
         Write-Host "Opciones:" -ForegroundColor Cyan
         Write-Host "  .\install_inference.ps1 -AllowCpuFallback   # CPU ahora (lento)" -ForegroundColor DarkGray
-        Write-Host "  Corrige Build Tools y repite con -Backend vulkan" -ForegroundColor DarkGray
+        Write-Host "  Activa LongPathsEnabled + Build Tools y repite -Backend vulkan" -ForegroundColor DarkGray
     }
 }
 
