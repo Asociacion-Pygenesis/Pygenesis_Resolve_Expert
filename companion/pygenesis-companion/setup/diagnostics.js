@@ -137,6 +137,80 @@ function checkInstallerBundle(packageRoot) {
   };
 }
 
+function hasFullVulkanSdk() {
+  const roots = [];
+  if (process.env.VULKAN_SDK) roots.push(process.env.VULKAN_SDK);
+  if (fs.existsSync("C:\\VulkanSDK")) {
+    try {
+      const dirs = fs.readdirSync("C:\\VulkanSDK", { withFileTypes: true });
+      dirs
+        .filter((d) => d.isDirectory())
+        .map((d) => path.join("C:\\VulkanSDK", d.name))
+        .sort()
+        .reverse()
+        .forEach((p) => roots.push(p));
+    } catch (_) {
+      /* ignore */
+    }
+  }
+  for (const root of roots) {
+    if (!root) continue;
+    const glslc = path.join(root, "Bin", "glslc.exe");
+    const include = path.join(root, "Include", "vulkan", "vulkan.h");
+    const lib = path.join(root, "Lib", "vulkan-1.lib");
+    if (fs.existsSync(glslc) && fs.existsSync(include) && fs.existsSync(lib)) {
+      return { ok: true, path: root };
+    }
+  }
+  return { ok: false, path: null };
+}
+
+function checkGpuBackend() {
+  const bridge = readBridgeEnv();
+  const configured = (bridge.PYGENESIS_GPU_BACKEND || "").toLowerCase();
+  const sdk = hasFullVulkanSdk();
+
+  if (configured === "cuda") {
+    return {
+      ok: true,
+      required: false,
+      detail: "Backend CUDA (configurado en bridge.env)",
+    };
+  }
+  if (configured === "cpu") {
+    return {
+      ok: true,
+      required: false,
+      detail:
+        "Backend CPU. En AMD, GPU requiere Vulkan SDK + VS Build Tools (C++); VulkanRT no basta.",
+    };
+  }
+  if (configured === "vulkan") {
+    return {
+      ok: sdk.ok,
+      required: false,
+      detail: sdk.ok
+        ? "Backend Vulkan — SDK: " + sdk.path
+        : "Backend Vulkan en config, pero falta Vulkan SDK completo",
+    };
+  }
+
+  // Not installed yet: informational tip for AMD laptops
+  if (sdk.ok) {
+    return {
+      ok: true,
+      required: false,
+      detail: "Vulkan SDK detectado (" + sdk.path + "). AMD podra usar GPU al instalar.",
+    };
+  }
+  return {
+    ok: true,
+    required: false,
+    detail:
+      "Sin Vulkan SDK. NVIDIA→CUDA; AMD sin SDK→CPU automatico. SDK: https://vulkan.lunarg.com/sdk/home",
+  };
+}
+
 /**
  * @param {string} packageRoot
  * @returns {Promise<object>}
@@ -148,6 +222,7 @@ async function runDiagnostics(packageRoot) {
   const plugin = checkPlugin();
   const bridge = await checkBridgeHealth(8000);
   const bundle = checkInstallerBundle(packageRoot);
+  const gpu = checkGpuBackend();
 
   const readyForChat = runtime.ok && model.ok;
   const needsInstall =
@@ -176,6 +251,13 @@ async function runDiagnostics(packageRoot) {
       detail: model.ok
         ? model.path + " (" + model.sizeMb + " MB)"
         : "Se descargara desde Hugging Face al instalar",
+    },
+    gpu: {
+      id: "gpu",
+      label: "Aceleracion GPU",
+      ok: gpu.ok,
+      required: false,
+      detail: gpu.detail,
     },
     plugin: {
       id: "plugin",

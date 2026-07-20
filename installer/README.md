@@ -9,6 +9,16 @@ Instalador cerrado de **Pygenesis ResolveExpert** para Windows. El modelo GGUF s
 - Conexión a Internet (descarga del modelo `pygenesis-resolve-q4km.gguf`)
 - DaVinci Resolve Studio (plugin) y/o Free (Companion)
 
+### GPU (opcional)
+
+| Hardware | Que hace el instalador |
+|----------|------------------------|
+| **NVIDIA** | CUDA (wheels). Suele ir bien sin compilar. |
+| **AMD** | Vulkan/GPU **solo** con [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) completo (SDK Installer, **no** solo VulkanRT) + Visual Studio Build Tools (C++). Sin eso → **CPU automatico** (mas lento, pero usable). |
+| Sin GPU | CPU. |
+
+No hace falta instalar el Vulkan SDK para usar Pygenesis: en portatiles AMD sin SDK la instalacion continua en CPU.
+
 ## Instalacion en 1 clic (Companion .exe)
 
 La forma recomendada es abrir **Pygenesis Companion**: la propia app muestra que componentes tienes y cuales faltan, e instala lo pendiente (runtime, modelo HF, plugin).

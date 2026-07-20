@@ -18,6 +18,16 @@ Requisitos: Windows 10/11, Python 3.10+ en PATH, Internet (descarga del GGUF).
 
 Alternativa sin GUI: doble clic en [`Install.bat`](Install.bat).
 
+### GPU / aceleración
+
+| Hardware | Comportamiento del instalador |
+|----------|-------------------------------|
+| **NVIDIA** | Intenta CUDA (wheels precompilados). |
+| **AMD Radeon** | Solo usa Vulkan/GPU si tienes el **Vulkan SDK completo** (LunarG) + VS Build Tools (C++). El runtime `VulkanRT` **no basta**. Sin SDK → **CPU automático**. |
+| **Sin GPU dedicada** | CPU. |
+
+Vulkan SDK: https://vulkan.lunarg.com/sdk/home (elige *SDK Installer*, no solo runtime).
+
 Guía: [`installer/README.md`](installer/README.md) · Companion: [`companion/README.md`](companion/README.md).
 
 ---

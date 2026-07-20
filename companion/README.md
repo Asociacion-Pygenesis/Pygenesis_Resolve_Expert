@@ -9,10 +9,13 @@ App Electron para **DaVinci Resolve Free** (tambien usable en Studio). Al abrirl
    - Python 3.10+
    - Runtime Pygenesis
    - Modelo GGUF (Hugging Face)
+   - Aceleracion GPU (CUDA / Vulkan SDK / CPU)
    - Plugin Resolve Studio (opcional)
    - Puente localhost:8000
 3. Pulsa **Instalar lo que falta** → **Arrancar puente** → **Continuar al chat**.
 4. En Studio, el plugin sigue en `Workspace → Workflow Integrations → Pygenesis Resolve Tutor`.
+
+**AMD:** sin Vulkan SDK completo el instalador usa **CPU** (no falla). El runtime VulkanRT no sirve; hace falta el SDK de LunarG + Build Tools (C++) para GPU.
 
 El `.exe` empaqueta (via `extraResources`) `installer/`, `backend/` y `plugin/`, asi puede instalar sin clonar el repo.
 

@@ -75,7 +75,7 @@
   function applyStatus(status) {
     if (!els.list) return;
     els.list.innerHTML = "";
-    var order = ["python", "bundle", "runtime", "model", "plugin", "bridge"];
+    var order = ["python", "bundle", "runtime", "model", "gpu", "plugin", "bridge"];
     order.forEach(function (key) {
       if (status[key]) els.list.appendChild(renderItem(status[key]));
     });
@@ -209,6 +209,7 @@
     els.continueBtn = $("setup-continue-btn");
     els.openSetupBtn = $("open-setup-btn");
     els.pythonHelp = $("setup-python-help");
+    els.vulkanHelp = $("setup-vulkan-help");
 
     if (!els.setupView) return;
 
@@ -228,6 +229,14 @@
         e.preventDefault();
         if (global.pygenesisSetup) {
           global.pygenesisSetup.openExternal("https://www.python.org/downloads/");
+        }
+      });
+    }
+    if (els.vulkanHelp) {
+      els.vulkanHelp.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (global.pygenesisSetup) {
+          global.pygenesisSetup.openExternal("https://vulkan.lunarg.com/sdk/home");
         }
       });
     }

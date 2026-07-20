@@ -32,12 +32,7 @@ function Install-LlamaCpp {
         "vulkan" {
             $vulkanSdk = Resolve-VulkanSdkPath
             if (-not $vulkanSdk) {
-                Write-Host ""
-                Write-Host "No se encontró el Vulkan SDK completo (solo runtime no sirve para compilar)." -ForegroundColor Red
-                Write-Host "Instala el SDK Installer (~309 MB), no solo VulkanRT:" -ForegroundColor Yellow
-                Write-Host "  vulkansdk-windows-X64-1.4.350.0.exe" -ForegroundColor Yellow
-                Write-Host "Marca la opción de añadir variables de entorno al PATH." -ForegroundColor Yellow
-                Write-Host "Luego abre una PowerShell NUEVA y repite este script." -ForegroundColor Yellow
+                Write-Host "Vulkan SDK completo no disponible." -ForegroundColor Yellow
                 return 1
             }
 
@@ -55,7 +50,7 @@ function Install-LlamaCpp {
             if ($code -ne 0) {
                 & $VenvPython -c "import llama_cpp" 2>$null
                 if ($LASTEXITCODE -eq 0) {
-                    Write-Host "pip devolvió error pero llama_cpp importa OK; continuando." -ForegroundColor Yellow
+                    Write-Host "pip devolvio error pero llama_cpp importa OK; continuando." -ForegroundColor Yellow
                     $code = 0
                 }
             }
@@ -122,35 +117,55 @@ function Resolve-PygenesisPython {
 
 $VenvPython = Resolve-PygenesisPython -Explicit $PythonExe
 if (-not $VenvPython) {
-    Write-Host "No se encontró Python de Pygenesis." -ForegroundColor Yellow
+    Write-Host "No se encontro Python de Pygenesis." -ForegroundColor Yellow
     Write-Host "Ejecuta installer\Install.bat o crea training\.venv con setup_env_windows.ps1" -ForegroundColor Yellow
     exit 1
 }
 Write-Host "Python: $VenvPython" -ForegroundColor DarkGray
 
+$detectedGpuName = ""
 if ($Backend -eq "auto") {
     $detected = & (Join-Path $ScriptsDir "detect_gpu.ps1")
     $Backend = $detected.Backend
-    Write-Host "GPU detectada: $($detected.GpuName) → backend $Backend" -ForegroundColor Cyan
+    $detectedGpuName = [string]$detected.GpuName
+    Write-Host "GPU detectada: $detectedGpuName -> backend $Backend" -ForegroundColor Cyan
+}
+
+$requestedBackend = $Backend
+
+# AMD/Vulkan sin SDK: no intentar compilar; pasar a CPU si hay fallback
+if ($Backend -eq "vulkan" -and -not (Resolve-VulkanSdkPath)) {
+    Write-Host ""
+    Write-Host "GPU AMD/Vulkan detectada, pero no hay Vulkan SDK completo." -ForegroundColor Yellow
+    Write-Host "El runtime (VulkanRT) NO sirve para compilar llama-cpp-python." -ForegroundColor DarkGray
+    Write-Host "Para aceleracion GPU en AMD necesitas:" -ForegroundColor DarkGray
+    Write-Host "  1) LunarG Vulkan SDK (SDK Installer, no solo runtime): https://vulkan.lunarg.com/sdk/home" -ForegroundColor DarkGray
+    Write-Host "  2) Visual Studio Build Tools con 'Desarrollo de escritorio con C++'" -ForegroundColor DarkGray
+    Write-Host "  3) PowerShell nueva y: .\install_inference.ps1 -Backend vulkan" -ForegroundColor DarkGray
+    if ($AllowCpuFallback) {
+        Write-Host ""
+        Write-Host "Instalando backend CPU (funciona sin SDK; mas lento)..." -ForegroundColor Cyan
+        $Backend = "cpu"
+    } else {
+        Write-Host ""
+        Write-Host "Sin -AllowCpuFallback no se puede continuar. Opciones:" -ForegroundColor Red
+        Write-Host "  .\install_inference.ps1 -AllowCpuFallback" -ForegroundColor DarkGray
+        Write-Host "  Instala Vulkan SDK + Build Tools y repite -Backend vulkan" -ForegroundColor DarkGray
+        exit 1
+    }
 }
 
 Write-Host "Instalando dependencias base del puente..." -ForegroundColor Cyan
 & $VenvPython -m pip install -r (Join-Path $BackendRoot "requirements.txt")
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
-$requestedBackend = $Backend
 Write-Host "Instalando llama-cpp-python ($Backend)..." -ForegroundColor Cyan
 $exitCode = Install-LlamaCpp -TargetBackend $Backend
 
 if ($exitCode -ne 0 -and $Backend -eq "vulkan") {
     Write-Host ""
-    Write-Host "Vulkan no se pudo compilar." -ForegroundColor Yellow
-    if (-not (Resolve-VulkanSdkPath)) {
-        Write-Host "Causa probable: falta el SDK completo (headers + glslc + vulkan-1.lib)." -ForegroundColor Yellow
-        Write-Host "VulkanRT solo sirve para ejecutar; no para compilar llama-cpp-python." -ForegroundColor Yellow
-    } else {
-        Write-Host "Revisa que VS Build Tools tenga 'Desarrollo de escritorio con C++'." -ForegroundColor Yellow
-    }
+    Write-Host "Vulkan no se pudo compilar (SDK presente pero fallo el build)." -ForegroundColor Yellow
+    Write-Host "Revisa VS Build Tools (C++) y una PowerShell nueva con VULKAN_SDK en PATH." -ForegroundColor DarkGray
     if ($AllowCpuFallback) {
         Write-Host ""
         Write-Host "Fallback a CPU (wheel precompilado)..." -ForegroundColor Cyan
@@ -160,14 +175,24 @@ if ($exitCode -ne 0 -and $Backend -eq "vulkan") {
         Write-Host ""
         Write-Host "Opciones:" -ForegroundColor Cyan
         Write-Host "  .\install_inference.ps1 -AllowCpuFallback   # CPU ahora (lento)" -ForegroundColor DarkGray
-        Write-Host "  Instala VS Build Tools y repite con -Backend vulkan" -ForegroundColor DarkGray
+        Write-Host "  Corrige Build Tools y repite con -Backend vulkan" -ForegroundColor DarkGray
     }
+}
+
+if ($exitCode -ne 0 -and $Backend -eq "cuda" -and $AllowCpuFallback) {
+    Write-Host ""
+    Write-Host "CUDA no se pudo instalar; fallback a CPU..." -ForegroundColor Yellow
+    $Backend = "cpu"
+    $exitCode = Install-LlamaCpp -TargetBackend "cpu"
 }
 
 if ($exitCode -ne 0) { exit 1 }
 
-if ($requestedBackend -eq "vulkan" -and $Backend -eq "cpu") {
-    Write-Host "AVISO: se instaló CPU en lugar de Vulkan." -ForegroundColor Yellow
+if ($requestedBackend -ne $Backend) {
+    Write-Host "AVISO: se solicito '$requestedBackend' y se instalo '$Backend'." -ForegroundColor Yellow
+    if ($detectedGpuName) {
+        Write-Host "  GPU: $detectedGpuName" -ForegroundColor DarkGray
+    }
 }
 
 $dataDir = Join-Path $env:LOCALAPPDATA "Pygenesis"
