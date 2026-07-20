@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   Instala llama-cpp-python con el backend adecuado (CUDA, Vulkan o CPU).
@@ -18,7 +18,8 @@
 param(
     [ValidateSet("auto", "cuda", "vulkan", "cpu")]
     [string]$Backend = "auto",
-    [switch]$AllowCpuFallback
+    [switch]$AllowCpuFallback,
+    [string]$PythonExe = ""
 )
 
 function Install-LlamaCpp {
@@ -105,14 +106,27 @@ $ErrorActionPreference = "Stop"
 $ScriptsDir = $PSScriptRoot
 $BackendRoot = Split-Path $ScriptsDir -Parent
 $RepoRoot = Split-Path $BackendRoot -Parent
-$VenvPython = Join-Path $RepoRoot "training\.venv\Scripts\python.exe"
 
-if (-not (Test-Path $VenvPython)) {
-    Write-Host "No se encontró training\.venv. Crea el entorno primero:" -ForegroundColor Yellow
-    Write-Host "  Set-Location `"$RepoRoot\training`""
-    Write-Host "  .\scripts\setup_env_windows.ps1"
+function Resolve-PygenesisPython {
+    param([string]$Explicit)
+    if ($Explicit -and (Test-Path $Explicit)) { return $Explicit }
+    if ($env:PYGENESIS_PYTHON -and (Test-Path $env:PYGENESIS_PYTHON)) {
+        return $env:PYGENESIS_PYTHON
+    }
+    $runtime = Join-Path $env:LOCALAPPDATA "Pygenesis\runtime\Scripts\python.exe"
+    if (Test-Path $runtime) { return $runtime }
+    $dev = Join-Path $RepoRoot "training\.venv\Scripts\python.exe"
+    if (Test-Path $dev) { return $dev }
+    return $null
+}
+
+$VenvPython = Resolve-PygenesisPython -Explicit $PythonExe
+if (-not $VenvPython) {
+    Write-Host "No se encontró Python de Pygenesis." -ForegroundColor Yellow
+    Write-Host "Ejecuta installer\Install.bat o crea training\.venv con setup_env_windows.ps1" -ForegroundColor Yellow
     exit 1
 }
+Write-Host "Python: $VenvPython" -ForegroundColor DarkGray
 
 if ($Backend -eq "auto") {
     $detected = & (Join-Path $ScriptsDir "detect_gpu.ps1")
@@ -160,9 +174,18 @@ $dataDir = Join-Path $env:LOCALAPPDATA "Pygenesis"
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 $configPath = Join-Path $dataDir "bridge.env"
 
-@"
-PYGENESIS_GPU_BACKEND=$Backend
-"@ | Set-Content -Path $configPath -Encoding UTF8
+function Set-BridgeEnvValue {
+    param([string]$Path, [string]$Name, [string]$Value)
+    $lines = @()
+    if (Test-Path $Path) {
+        $lines = Get-Content $Path | Where-Object { $_ -notmatch "^\s*$([regex]::Escape($Name))\s*=" }
+    }
+    $lines += "$Name=$Value"
+    $lines | Set-Content -Path $Path -Encoding UTF8
+}
+
+Set-BridgeEnvValue -Path $configPath -Name "PYGENESIS_GPU_BACKEND" -Value $Backend
+Set-BridgeEnvValue -Path $configPath -Name "PYGENESIS_PYTHON" -Value $VenvPython
 
 Write-Host ""
 Write-Host "Inferencia instalada ($Backend)." -ForegroundColor Green

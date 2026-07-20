@@ -1,78 +1,65 @@
 # Pygenesis Companion
 
-Ventana flotante independiente para usuarios de **DaVinci Resolve Free** (y como alternativa en Studio). Reutiliza el chat y el puente de inferencia local, pero **no** necesita Workflow Integration ni `WorkflowIntegration.node`.
+App Electron para **DaVinci Resolve Free** (tambien usable en Studio). Al abrirla actua como **asistente de instalacion** (como en Unity): muestra que tienes y que falta, y puede instalarlo.
 
-## Requisitos
+## Usuario final (recomendado)
 
-- Puente activo en `http://localhost:8000` (`backend\start_backend.ps1`)
-- Modelo GGUF instalado (`installer\install_pygenesis.ps1`)
-- Node.js 18+ (para Electron)
+1. Descarga el release / ejecuta el `.exe` portable de Companion (o `npm start` en desarrollo).
+2. La app muestra el estado:
+   - Python 3.10+
+   - Runtime Pygenesis
+   - Modelo GGUF (Hugging Face)
+   - Plugin Resolve Studio (opcional)
+   - Puente localhost:8000
+3. Pulsa **Instalar lo que falta** → **Arrancar puente** → **Continuar al chat**.
+4. En Studio, el plugin sigue en `Workspace → Workflow Integrations → Pygenesis Resolve Tutor`.
 
-## Instalación
+El `.exe` empaqueta (via `extraResources`) `installer/`, `backend/` y `plugin/`, asi puede instalar sin clonar el repo.
 
-```powershell
-Set-Location "C:\Users\navar\PycharmProjects\Pygenesis_ResolveExpert\companion\scripts"
-.\install_companion.ps1
-```
-
-Sincroniza `chat-api.js`, `chat-ui.js` y estilos desde el plugin Studio.
-
-## Uso
-
-1. Arranca el puente:
+## Desarrollo
 
 ```powershell
-cd backend
-.\start_backend.ps1
-```
-
-2. Abre Companion:
-
-```powershell
-cd companion\scripts
+Set-Location companion\scripts
+.\install_companion.ps1 -Dev
 .\start_companion.ps1
 ```
 
-3. Indica manualmente la **página** en la que trabajas (Media, Cut, Edit, Fusion, Color, Fairlight, Deliver).
-4. Opcional: nombre de proyecto y timeline.
-5. Escribe tu pregunta.
+O directamente:
 
-La selección se guarda en `localStorage` del navegador Electron.
+```powershell
+Set-Location companion\pygenesis-companion
+npm install
+npm start
+```
 
-## Contexto inteligente
+## Build del .exe
 
-Igual que el plugin Studio:
+```powershell
+Set-Location companion\pygenesis-companion
+npm install
+npm run build
+```
 
-- Si preguntas sobre Fusion pero indicaste Edit → aviso *Respuesta general*.
-- Preguntas tipo «¿qué debería revisar?» usan la página seleccionada.
-- El backend (`page_context.py`) sigue analizando el texto de la pregunta.
+Si aparece un error de *symbolic link / winCodeSign*, ya esta mitigado en `package.json` (`signAndEditExecutable: false`). Alternativa del sistema: activar **Modo de desarrollador** en Windows.
+
+Salida en `companion/dist/` (`Pygenesis-Companion-*-portable.exe` + `win-unpacked`).
+
+Tambien: `installer\build_release.ps1` (incluye Companion en el ZIP de GitHub).
 
 ## Studio vs Free
 
-| Edición | Opción recomendada |
-|---------|-------------------|
-| **Resolve Studio** | Plugin integrado: `Workspace → Workflow Integrations → Pygenesis Resolve Tutor` |
-| **Resolve Free** | **Pygenesis Companion** (esta app) |
+| Edicion | Uso |
+|---------|-----|
+| **Resolve Studio** | Plugin integrado + esta app para setup/chat |
+| **Resolve Free** | Solo Companion (contexto manual de pagina) |
 
 ## Estructura
 
 ```
-companion/
-├── pygenesis-companion/
-│   ├── main.js              # Electron standalone
-│   ├── index.html           # UI + selector de página
-│   ├── js/
-│   │   ├── companion-context.js
-│   │   ├── chat-api.js      # copia del plugin
-│   │   └── chat-ui.js
-│   └── css/styles.css
-└── scripts/
-    ├── install_companion.ps1
-    └── start_companion.ps1
+companion/pygenesis-companion/
+├── main.js / preload.js     # Electron + IPC setup
+├── setup/                   # diagnostico + lanzador de install_pygenesis.ps1
+├── js/setup-ui.js           # pantalla de instalacion
+├── index.html               # setup + chat
+└── ...
 ```
-
-## Roadmap (fase 2)
-
-- Script Lua interno en Resolve Free para leer página/proyecto automáticamente
-- Acceso directo en el escritorio desde el instalador
-- Icono de aplicación

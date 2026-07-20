@@ -456,3 +456,145 @@ body {
   font-size: 10px;
   flex-shrink: 0;
 }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-gear {
+  font-size: 10px;
+  padding: 4px 8px;
+}
+
+/* --- Setup wizard --- */
+.setup-app .setup-main {
+  flex: 1;
+  overflow: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.setup-intro {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.setup-intro-muted {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.setup-intro a {
+  color: var(--accent);
+}
+
+.setup-summary {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.setup-summary-ok {
+  background: rgba(92, 184, 92, 0.12);
+  color: var(--ok);
+  border-color: rgba(92, 184, 92, 0.35);
+}
+
+.setup-summary-warn {
+  background: rgba(240, 173, 78, 0.12);
+  color: var(--pending);
+  border-color: rgba(240, 173, 78, 0.35);
+}
+
+.setup-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setup-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+}
+
+.setup-item-title {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.setup-item-detail {
+  margin-top: 3px;
+  color: var(--text-dim);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.setup-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 7px;
+  border-radius: 4px;
+}
+
+.setup-ok .setup-badge {
+  background: rgba(92, 184, 92, 0.18);
+  color: var(--ok);
+}
+
+.setup-missing .setup-badge {
+  background: rgba(231, 76, 60, 0.18);
+  color: var(--error);
+}
+
+.setup-optional .setup-badge {
+  background: rgba(154, 154, 154, 0.15);
+  color: var(--text-muted);
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.setup-btn,
+.setup-btn-primary {
+  flex: 1 1 140px;
+}
+
+.setup-log-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.setup-log {
+  flex: 1;
+  min-height: 120px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  background: #141414;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

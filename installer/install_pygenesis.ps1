@@ -1,37 +1,42 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Instalador unificado: GPU + inferencia + modelo HF + plugin Resolve.
+  Instalador cerrado: GPU + inferencia + modelo HF + plugin + Companion.
 
 .DESCRIPTION
-  1. Detecta GPU (NVIDIA → CUDA, AMD → Vulkan, si no CPU)
-  2. Instala llama-cpp-python y deps del puente
-  3. Descarga GGUF desde Hugging Face (si no existe localmente)
-  4. Instala el plugin en Resolve
+  1. Crea runtime Python en %LOCALAPPDATA%\Pygenesis\runtime\
+  2. Detecta GPU e instala llama-cpp-python
+  3. Descarga GGUF desde Hugging Face (SuNavar/Pygenesis_ResolveExpert)
+  4. Instala el plugin en Resolve Studio
+  5. Instala Companion (portable preconstruido o modo dev)
+  6. Crea atajos en el menú Inicio
 
 .PARAMETER Backend
   Forzar backend: auto | cuda | vulkan | cpu
 
 .PARAMETER SkipModelDownload
-  No descarga el modelo (útil si ya está en %LOCALAPPDATA%\Pygenesis\models\)
+  No descarga el modelo
 
 .PARAMETER SkipPlugin
   Solo instala puente + modelo
 
 .PARAMETER SkipCompanion
-  No instala la app Companion (Resolve Free)
+  No instala Companion
+
+.PARAMETER SkipShortcuts
+  No crea atajos del menú Inicio
 
 .EXAMPLE
   .\install_pygenesis.ps1
   .\install_pygenesis.ps1 -Backend vulkan
-  .\install_pygenesis.ps1 -SkipPlugin
 #>
 param(
     [ValidateSet("auto", "cuda", "vulkan", "cpu")]
     [string]$Backend = "auto",
     [switch]$SkipModelDownload,
     [switch]$SkipPlugin,
-    [switch]$SkipCompanion
+    [switch]$SkipCompanion,
+    [switch]$SkipShortcuts
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,19 +45,102 @@ $RepoRoot = Split-Path $InstallerRoot -Parent
 $BackendScripts = Join-Path $RepoRoot "backend\scripts"
 $PluginScripts = Join-Path $RepoRoot "plugin\scripts"
 $CompanionScripts = Join-Path $RepoRoot "companion\scripts"
-$VenvPython = Join-Path $RepoRoot "training\.venv\Scripts\python.exe"
 $ModelSourcePath = Join-Path $InstallerRoot "model.source.json"
+$PygenesisHome = Join-Path $env:LOCALAPPDATA "Pygenesis"
+$RuntimeDir = Join-Path $PygenesisHome "runtime"
+$RuntimePython = Join-Path $RuntimeDir "Scripts\python.exe"
+$AppDir = Join-Path $PygenesisHome "app"
+$BridgeEnv = Join-Path $PygenesisHome "bridge.env"
+
+function Set-BridgeEnvValue {
+    param([string]$Path, [string]$Name, [string]$Value)
+    $lines = @()
+    if (Test-Path $Path) {
+        $lines = @(Get-Content $Path | Where-Object { $_ -notmatch "^\s*$([regex]::Escape($Name))\s*=" })
+    }
+    $lines += "$Name=$Value"
+    New-Item -ItemType Directory -Force -Path (Split-Path $Path -Parent) | Out-Null
+    $lines | Set-Content -Path $Path -Encoding UTF8
+}
 
 function Import-BridgeEnv {
-    $envFile = Join-Path $env:LOCALAPPDATA "Pygenesis\bridge.env"
-    if (-not (Test-Path $envFile)) { return }
-    Get-Content $envFile | ForEach-Object {
+    if (-not (Test-Path $BridgeEnv)) { return }
+    Get-Content $BridgeEnv | ForEach-Object {
         if ($_ -match '^\s*([^#=]+)=(.*)$') {
-            $name = $matches[1].Trim()
-            $value = $matches[2].Trim()
-            Set-Item -Path "Env:$name" -Value $value
+            Set-Item -Path "Env:$($matches[1].Trim())" -Value $matches[2].Trim()
         }
     }
+}
+
+function Get-SystemPython {
+    $candidates = @()
+    foreach ($cmd in @("python", "python3", "py")) {
+        $found = Get-Command $cmd -ErrorAction SilentlyContinue
+        if ($found) { $candidates += $found.Source }
+    }
+    foreach ($exe in ($candidates | Select-Object -Unique)) {
+        try {
+            if ($exe -match 'WindowsApps\\python') { continue }
+            $verText = & $exe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $verText) { continue }
+            $parts = $verText.Trim().Split('.')
+            $major = [int]$parts[0]; $minor = [int]$parts[1]
+            if ($major -gt 3 -or ($major -eq 3 -and $minor -ge 10)) {
+                $resolved = & $exe -c "import sys; print(sys.executable)" 2>$null
+                if ($LASTEXITCODE -eq 0 -and $resolved -and (Test-Path $resolved.Trim())) {
+                    return $resolved.Trim()
+                }
+                return $exe
+            }
+        } catch { }
+    }
+    return $null
+}
+
+function Ensure-RuntimeVenv {
+    if (Test-Path $RuntimePython) {
+        Write-Host "Runtime ya presente: $RuntimePython" -ForegroundColor Green
+        return $RuntimePython
+    }
+
+    $sysPy = Get-SystemPython
+    if (-not $sysPy) {
+        throw "Se necesita Python 3.10+ en PATH. Instálalo desde https://www.python.org/downloads/ (marca 'Add python.exe to PATH')."
+    }
+
+    Write-Host "Creando runtime en $RuntimeDir ..." -ForegroundColor Cyan
+    Write-Host "  Base: $sysPy" -ForegroundColor DarkGray
+    New-Item -ItemType Directory -Force -Path $PygenesisHome | Out-Null
+    & $sysPy -m venv $RuntimeDir
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $RuntimePython)) {
+        throw "No se pudo crear el venv en $RuntimeDir"
+    }
+    & $RuntimePython -m pip install --upgrade pip
+    return $RuntimePython
+}
+
+function Sync-AppPayload {
+    $destBackend = Join-Path $AppDir "backend"
+    $destInstaller = Join-Path $AppDir "installer"
+    $destPlugin = Join-Path $AppDir "plugin"
+    New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
+
+    foreach ($pair in @(
+        @{ Src = (Join-Path $RepoRoot "backend"); Dst = $destBackend },
+        @{ Src = (Join-Path $RepoRoot "installer"); Dst = $destInstaller },
+        @{ Src = (Join-Path $RepoRoot "plugin"); Dst = $destPlugin }
+    )) {
+        if (-not (Test-Path $pair.Src)) { continue }
+        if (Test-Path $pair.Dst) {
+            Remove-Item $pair.Dst -Recurse -Force
+        }
+        Copy-Item -Path $pair.Src -Destination $pair.Dst -Recurse
+    }
+
+    Get-ChildItem $AppDir -Recurse -Directory -Filter "__pycache__" -ErrorAction SilentlyContinue |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "App instalada en: $AppDir" -ForegroundColor DarkGray
+    return $destBackend
 }
 
 function Get-ModelSource {
@@ -63,8 +151,9 @@ function Get-ModelSource {
 }
 
 function Ensure-ModelDownloaded {
+    param([string]$PythonExe)
     $source = Get-ModelSource
-    $modelDir = Join-Path $env:LOCALAPPDATA "Pygenesis\models"
+    $modelDir = Join-Path $PygenesisHome "models"
     New-Item -ItemType Directory -Force -Path $modelDir | Out-Null
     $dest = Join-Path $modelDir $source.filename
 
@@ -74,6 +163,10 @@ function Ensure-ModelDownloaded {
     }
 
     Write-Host "Descargando modelo desde Hugging Face ($($source.repo_id))..." -ForegroundColor Cyan
+    Write-Host "  Archivo: $($source.filename)  (puede tardar varios minutos)" -ForegroundColor DarkGray
+    & $PythonExe -m pip install "huggingface-hub>=0.23" -q
+    if ($LASTEXITCODE -ne 0) { throw "No se pudo instalar huggingface-hub" }
+
     $py = @"
 import json
 from pathlib import Path
@@ -91,41 +184,90 @@ path = hf_hub_download(
 )
 print(path)
 "@
-    $downloaded = & $VenvPython -c $py
+    $downloaded = & $PythonExe -c $py
     if ($LASTEXITCODE -ne 0) {
-        throw "Falló la descarga del modelo. Comprueba repo_id en installer/model.source.json"
+        throw "Falló la descarga del modelo. Comprueba repo_id en installer/model.source.json y la red."
     }
-    Write-Host "Modelo descargado: $downloaded" -ForegroundColor Green
+    if (-not (Test-Path $dest)) {
+        if ($downloaded -and (Test-Path "$downloaded")) {
+            Copy-Item "$downloaded" $dest -Force
+        }
+    }
+    if (-not (Test-Path $dest)) {
+        throw "Descarga OK pero no se encontró $dest"
+    }
+    Write-Host "Modelo descargado: $dest" -ForegroundColor Green
     return $dest
+}
+
+function New-Shortcut {
+    param(
+        [string]$LinkPath,
+        [string]$TargetPath,
+        [string]$Arguments = "",
+        [string]$WorkingDirectory = "",
+        [string]$Description = ""
+    )
+    $shell = New-Object -ComObject WScript.Shell
+    $sc = $shell.CreateShortcut($LinkPath)
+    $sc.TargetPath = $TargetPath
+    if ($Arguments) { $sc.Arguments = $Arguments }
+    if ($WorkingDirectory) { $sc.WorkingDirectory = $WorkingDirectory }
+    if ($Description) { $sc.Description = $Description }
+    $sc.Save()
+}
+
+function Install-StartMenuShortcuts {
+    param(
+        [string]$BackendStartScript,
+        [string]$CompanionExe
+    )
+    $programs = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Pygenesis"
+    New-Item -ItemType Directory -Force -Path $programs | Out-Null
+
+    $backendLink = Join-Path $programs "Pygenesis Backend.lnk"
+    New-Shortcut -LinkPath $backendLink `
+        -TargetPath "powershell.exe" `
+        -Arguments "-NoExit -ExecutionPolicy Bypass -File `"$BackendStartScript`"" `
+        -WorkingDirectory (Split-Path $BackendStartScript -Parent) `
+        -Description "Arranca el puente de inferencia local (puerto 8000)"
+
+    if ($CompanionExe -and (Test-Path $CompanionExe)) {
+        $compLink = Join-Path $programs "Pygenesis Companion.lnk"
+        New-Shortcut -LinkPath $compLink `
+            -TargetPath $CompanionExe `
+            -WorkingDirectory (Split-Path $CompanionExe -Parent) `
+            -Description "Companion para DaVinci Resolve Free"
+    }
+
+    Write-Host "Atajos creados en: $programs" -ForegroundColor Green
 }
 
 Write-Host "=== Pygenesis ResolveExpert — Instalador ===" -ForegroundColor Cyan
 Write-Host ""
 
-if (-not (Test-Path $VenvPython)) {
-    Write-Host "Creando entorno Python..." -ForegroundColor Yellow
-    Push-Location (Join-Path $RepoRoot "training")
-    & .\scripts\setup_env_windows.ps1
-    Pop-Location
-    if (-not (Test-Path $VenvPython)) { throw "No se pudo crear training\.venv" }
-}
+$pythonExe = Ensure-RuntimeVenv
+Set-BridgeEnvValue -Path $BridgeEnv -Name "PYGENESIS_PYTHON" -Value $pythonExe
+$env:PYGENESIS_PYTHON = $pythonExe
 
-Write-Host "[1/4] Detectando GPU e instalando motor de inferencia..." -ForegroundColor Cyan
-& (Join-Path $BackendScripts "install_inference.ps1") -Backend $Backend
+Write-Host ""
+Write-Host "[1/5] Sincronizando app e instalando motor de inferencia..." -ForegroundColor Cyan
+$appBackend = Sync-AppPayload
+$appBackendScripts = Join-Path $appBackend "scripts"
+& (Join-Path $BackendScripts "install_inference.ps1") -Backend $Backend -PythonExe $pythonExe -AllowCpuFallback
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
 Import-BridgeEnv
 
 if (-not $SkipModelDownload) {
     Write-Host ""
-    Write-Host "[2/4] Modelo GGUF..." -ForegroundColor Cyan
-    $modelPath = Ensure-ModelDownloaded
-    $envFile = Join-Path $env:LOCALAPPDATA "Pygenesis\bridge.env"
-    Add-Content -Path $envFile -Value "PYGENESIS_MODEL_PATH=$modelPath"
+    Write-Host "[2/5] Modelo GGUF (Hugging Face)..." -ForegroundColor Cyan
+    $modelPath = Ensure-ModelDownloaded -PythonExe $pythonExe
+    Set-BridgeEnvValue -Path $BridgeEnv -Name "PYGENESIS_MODEL_PATH" -Value $modelPath
     Write-Host "PYGENESIS_MODEL_PATH=$modelPath" -ForegroundColor DarkGray
 } else {
     Write-Host ""
-    Write-Host "[2/4] Modelo omitido (-SkipModelDownload)" -ForegroundColor Yellow
+    Write-Host "[2/5] Modelo omitido (-SkipModelDownload)" -ForegroundColor Yellow
 }
 
 if (-not $SkipPlugin) {
@@ -138,25 +280,55 @@ if (-not $SkipPlugin) {
     Write-Host "[3/5] Plugin omitido (-SkipPlugin)" -ForegroundColor Yellow
 }
 
+$companionExe = $null
 if (-not $SkipCompanion) {
     Write-Host ""
     Write-Host "[4/5] Companion (Resolve Free)..." -ForegroundColor Cyan
     & (Join-Path $CompanionScripts "install_companion.ps1")
     if ($LASTEXITCODE -ne 0) { exit 1 }
+    $installed = Join-Path $PygenesisHome "companion"
+    $portable = Get-ChildItem $installed -Recurse -Filter "Pygenesis Companion.exe" -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $portable) {
+        $portable = Get-ChildItem $installed -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notmatch 'uninstall|elevate' } |
+            Select-Object -First 1
+    }
+    if ($portable) { $companionExe = $portable.FullName }
 } else {
     Write-Host ""
     Write-Host "[4/5] Companion omitido (-SkipCompanion)" -ForegroundColor Yellow
 }
 
+$backendStart = Join-Path $appBackendScripts "start_backend.ps1"
+if (-not (Test-Path $backendStart)) {
+    $backendStart = Join-Path $BackendScripts "start_backend.ps1"
+}
+
+$homeStartBackend = Join-Path $PygenesisHome "Start-Backend.ps1"
+@"
+#Requires -Version 5.1
+& '$backendStart' @args
+"@ | Set-Content -Path $homeStartBackend -Encoding UTF8
+
+if (-not $SkipShortcuts) {
+    Write-Host ""
+    Write-Host "[5/5] Atajos del menú Inicio..." -ForegroundColor Cyan
+    Install-StartMenuShortcuts -BackendStartScript $homeStartBackend -CompanionExe $companionExe
+} else {
+    Write-Host ""
+    Write-Host "[5/5] Atajos omitidos (-SkipShortcuts)" -ForegroundColor Yellow
+}
+
 Write-Host ""
-Write-Host "[5/5] Verificación..." -ForegroundColor Cyan
-$detected = & (Join-Path $BackendScripts "detect_gpu.ps1")
-Write-Host "  Backend GPU : $($detected.Backend) ($($detected.GpuName))" -ForegroundColor DarkGray
-Write-Host "  Config      : $env:LOCALAPPDATA\Pygenesis\bridge.env" -ForegroundColor DarkGray
+Write-Host "=== Instalación completada ===" -ForegroundColor Green
+Write-Host "  Runtime     : $RuntimeDir" -ForegroundColor DarkGray
+Write-Host "  App         : $AppDir" -ForegroundColor DarkGray
+Write-Host "  Config      : $BridgeEnv" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "Siguiente paso:" -ForegroundColor Green
-Write-Host "  cd backend"
-Write-Host "  .\start_backend.ps1"
+Write-Host "Siguiente paso:" -ForegroundColor Cyan
+Write-Host "  1. Arranca el puente: menú Inicio → Pygenesis Backend"
+Write-Host "     (o: powershell -File `"$homeStartBackend`")"
+Write-Host "  2. Resolve Studio → Workspace → Workflow Integrations → Pygenesis Resolve Tutor"
+Write-Host "  3. Resolve Free   → menú Inicio → Pygenesis Companion"
 Write-Host ""
-Write-Host "  Resolve Studio → Workspace → Workflow Integrations → Pygenesis Resolve Tutor"
-Write-Host "  Resolve Free   → companion\scripts\start_companion.ps1"

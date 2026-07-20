@@ -1,0 +1,215 @@
+"use strict";
+
+const fs = require("fs");
+const path = require("path");
+const { spawnSync } = require("child_process");
+const http = require("http");
+const os = require("os");
+
+const MODEL_FILENAME = "pygenesis-resolve-q4km.gguf";
+const PLUGIN_ID = "com.pygenesis.davinci.tutor";
+
+function localAppData() {
+  return process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+}
+
+function programData() {
+  return process.env.PROGRAMDATA || "C:\\ProgramData";
+}
+
+function pygenesisHome() {
+  return path.join(localAppData(), "Pygenesis");
+}
+
+function readBridgeEnv() {
+  const envPath = path.join(pygenesisHome(), "bridge.env");
+  const out = {};
+  if (!fs.existsSync(envPath)) return out;
+  const text = fs.readFileSync(envPath, "utf8");
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^\s*([^#=]+)=(.*)$/);
+    if (m) out[m[1].trim()] = m[2].trim();
+  }
+  return out;
+}
+
+function findSystemPython() {
+  const cmds = ["python", "python3", "py"];
+  for (const cmd of cmds) {
+    try {
+      const ver = spawnSync(cmd, ["-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], {
+        encoding: "utf8",
+        windowsHide: true,
+        timeout: 8000,
+      });
+      if (ver.status !== 0 || !ver.stdout) continue;
+      const parts = ver.stdout.trim().split(".");
+      const major = parseInt(parts[0], 10);
+      const minor = parseInt(parts[1], 10);
+      if (major > 3 || (major === 3 && minor >= 10)) {
+        const resolved = spawnSync(cmd, ["-c", "import sys; print(sys.executable)"], {
+          encoding: "utf8",
+          windowsHide: true,
+          timeout: 8000,
+        });
+        if (resolved.status === 0 && resolved.stdout && fs.existsSync(resolved.stdout.trim())) {
+          return { ok: true, path: resolved.stdout.trim(), version: ver.stdout.trim() };
+        }
+        return { ok: true, path: cmd, version: ver.stdout.trim() };
+      }
+    } catch (_) {
+      /* try next */
+    }
+  }
+  return { ok: false, path: null, version: null };
+}
+
+function checkRuntime() {
+  const bridge = readBridgeEnv();
+  const candidates = [];
+  if (bridge.PYGENESIS_PYTHON) candidates.push(bridge.PYGENESIS_PYTHON);
+  candidates.push(path.join(pygenesisHome(), "runtime", "Scripts", "python.exe"));
+  for (const p of candidates) {
+    if (p && fs.existsSync(p)) {
+      return { ok: true, path: p };
+    }
+  }
+  return { ok: false, path: null };
+}
+
+function checkModel() {
+  const bridge = readBridgeEnv();
+  const candidates = [];
+  if (bridge.PYGENESIS_MODEL_PATH) candidates.push(bridge.PYGENESIS_MODEL_PATH);
+  candidates.push(path.join(pygenesisHome(), "models", MODEL_FILENAME));
+  for (const p of candidates) {
+    if (p && fs.existsSync(p)) {
+      const sizeMb = Math.round(fs.statSync(p).size / (1024 * 1024));
+      return { ok: true, path: p, sizeMb };
+    }
+  }
+  return { ok: false, path: null, sizeMb: 0 };
+}
+
+function checkPlugin() {
+  const dir = path.join(
+    programData(),
+    "Blackmagic Design",
+    "DaVinci Resolve",
+    "Support",
+    "Workflow Integration Plugins",
+    PLUGIN_ID
+  );
+  const manifest = path.join(dir, "manifest.xml");
+  return { ok: fs.existsSync(manifest), path: dir };
+}
+
+function checkBridgeHealth(port) {
+  const p = port || 8000;
+  return new Promise((resolve) => {
+    const req = http.get({ host: "127.0.0.1", port: p, path: "/health", timeout: 2000 }, (res) => {
+      let body = "";
+      res.on("data", (c) => (body += c));
+      res.on("end", () => {
+        try {
+          const data = JSON.parse(body);
+          resolve({ ok: res.statusCode === 200 && data.status === "ok", detail: data });
+        } catch (_) {
+          resolve({ ok: false, detail: null });
+        }
+      });
+    });
+    req.on("error", () => resolve({ ok: false, detail: null }));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve({ ok: false, detail: null });
+    });
+  });
+}
+
+function checkInstallerBundle(packageRoot) {
+  const script = path.join(packageRoot, "installer", "install_pygenesis.ps1");
+  const modelSrc = path.join(packageRoot, "installer", "model.source.json");
+  return {
+    ok: fs.existsSync(script) && fs.existsSync(modelSrc),
+    script,
+    packageRoot,
+  };
+}
+
+/**
+ * @param {string} packageRoot
+ * @returns {Promise<object>}
+ */
+async function runDiagnostics(packageRoot) {
+  const python = findSystemPython();
+  const runtime = checkRuntime();
+  const model = checkModel();
+  const plugin = checkPlugin();
+  const bridge = await checkBridgeHealth(8000);
+  const bundle = checkInstallerBundle(packageRoot);
+
+  const readyForChat = runtime.ok && model.ok;
+  const needsInstall =
+    !runtime.ok || !model.ok || !plugin.ok || !python.ok;
+
+  return {
+    python: {
+      id: "python",
+      label: "Python 3.10+",
+      ok: python.ok,
+      required: true,
+      detail: python.ok ? python.version + " — " + python.path : "No encontrado en PATH",
+    },
+    runtime: {
+      id: "runtime",
+      label: "Runtime Pygenesis",
+      ok: runtime.ok,
+      required: true,
+      detail: runtime.ok ? runtime.path : "Falta %LOCALAPPDATA%\\Pygenesis\\runtime",
+    },
+    model: {
+      id: "model",
+      label: "Modelo GGUF",
+      ok: model.ok,
+      required: true,
+      detail: model.ok
+        ? model.path + " (" + model.sizeMb + " MB)"
+        : "Se descargara desde Hugging Face al instalar",
+    },
+    plugin: {
+      id: "plugin",
+      label: "Plugin Resolve Studio",
+      ok: plugin.ok,
+      required: false,
+      detail: plugin.ok
+        ? "Instalado en Workflow Integration Plugins"
+        : "Opcional si usas solo Resolve Free / Companion",
+    },
+    bridge: {
+      id: "bridge",
+      label: "Puente (localhost:8000)",
+      ok: bridge.ok,
+      required: true,
+      detail: bridge.ok ? "Activo" : "No esta en marcha (puedes arrancarlo desde aqui)",
+    },
+    bundle: {
+      id: "bundle",
+      label: "Paquete de instalacion",
+      ok: bundle.ok,
+      required: true,
+      detail: bundle.ok ? bundle.script : "No se encontro installer\\install_pygenesis.ps1",
+    },
+    readyForChat,
+    needsInstall,
+    packageRoot,
+  };
+}
+
+module.exports = {
+  runDiagnostics,
+  checkBridgeHealth,
+  pygenesisHome,
+  readBridgeEnv,
+  MODEL_FILENAME,
+};

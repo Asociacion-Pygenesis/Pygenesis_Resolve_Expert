@@ -1,13 +1,67 @@
 {
   "name": "pygenesis-companion",
-  "version": "0.1.0",
-  "description": "Pygenesis Companion — asistente flotante para DaVinci Resolve Free",
+  "version": "0.2.0",
+  "description": "Pygenesis Companion — setup guiado + chat para DaVinci Resolve",
   "main": "main.js",
   "private": true,
+  "author": "Pygenesis",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable dir",
+    "build:dir": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win dir"
   },
   "devDependencies": {
-    "electron": "^33.2.0"
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.pygenesis.companion",
+    "productName": "Pygenesis Companion",
+    "directories": {
+      "output": "../dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "css/**/*",
+      "js/**/*",
+      "setup/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../../installer",
+        "to": "installer",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../../backend",
+        "to": "backend",
+        "filter": ["**/*", "!**/__pycache__/**", "!**/*.pyc"]
+      },
+      {
+        "from": "../../plugin",
+        "to": "plugin",
+        "filter": ["**/*", "!**/node_modules/**"]
+      }
+    ],
+    "forceCodeSigning": false,
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "dir",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Pygenesis-Companion-${version}-portable.${ext}"
+    },
+    "portable": {
+      "artifactName": "Pygenesis-Companion-${version}-portable.exe"
+    }
   }
 }

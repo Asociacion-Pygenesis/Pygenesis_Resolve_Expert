@@ -32,5 +32,6 @@ Este roadmap se enfoca en la creación de la interfaz visual dentro de DaVinci R
 * [x] **Detección GPU:** NVIDIA → CUDA, AMD → Vulkan (`detect_gpu.ps1`, `install_inference.ps1`).
 * [x] **Instalador unificado:** `installer/install_pygenesis.ps1` (GPU + modelo HF + plugin).
 * [ ] **Control de Errores Críticos:** Pantallas de contingencia si el modelo no está descargado/cargado.
-* [ ] **Publicar modelo en Hugging Face** y actualizar `installer/model.source.json`.
+* [x] **Publicar modelo en Hugging Face** y actualizar `installer/model.source.json` (`SuNavar/Pygenesis_ResolveExpert`).
+* [x] **Instalador cerrado:** `Install.bat` + Companion con asistente de setup (estado + instalar lo que falta) + `build_release.ps1`.
 * [ ] **Evaluación automática** con `test_llm_davinci_resolve.md` vía puente.

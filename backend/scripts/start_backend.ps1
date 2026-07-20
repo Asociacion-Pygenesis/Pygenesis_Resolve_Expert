@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   Arranca el puente de inferencia FastAPI para el plugin Resolve.
@@ -18,7 +18,6 @@ param(
 $ErrorActionPreference = "Stop"
 $BackendRoot = Split-Path $PSScriptRoot -Parent
 $RepoRoot = Split-Path $BackendRoot -Parent
-$VenvPython = Join-Path $RepoRoot "training\.venv\Scripts\python.exe"
 $BridgeEnv = Join-Path $env:LOCALAPPDATA "Pygenesis\bridge.env"
 
 if (Test-Path $BridgeEnv) {
@@ -30,6 +29,19 @@ if (Test-Path $BridgeEnv) {
         }
     }
 }
+
+function Resolve-PygenesisPython {
+    if ($env:PYGENESIS_PYTHON -and (Test-Path $env:PYGENESIS_PYTHON)) {
+        return $env:PYGENESIS_PYTHON
+    }
+    $runtime = Join-Path $env:LOCALAPPDATA "Pygenesis\runtime\Scripts\python.exe"
+    if (Test-Path $runtime) { return $runtime }
+    $dev = Join-Path $RepoRoot "training\.venv\Scripts\python.exe"
+    if (Test-Path $dev) { return $dev }
+    return $null
+}
+
+$VenvPython = Resolve-PygenesisPython
 
 if (-not $env:VULKAN_SDK) {
     $machineVulkan = [Environment]::GetEnvironmentVariable("VULKAN_SDK", "Machine")
@@ -123,10 +135,9 @@ function Test-BridgeHealth([int]$ListenPort) {
     }
 }
 
-if (-not (Test-Path $VenvPython)) {
-    Write-Host "No se encontró training\.venv. Crea el entorno primero:" -ForegroundColor Yellow
-    Write-Host "  Set-Location `"$RepoRoot\training`""
-    Write-Host "  .\scripts\setup_env_windows.ps1"
+if (-not $VenvPython) {
+    Write-Host "No se encontró el runtime de Pygenesis." -ForegroundColor Yellow
+    Write-Host "Ejecuta installer\Install.bat (usuario) o training\scripts\setup_env_windows.ps1 (dev)." -ForegroundColor Yellow
     exit 1
 }
 

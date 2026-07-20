@@ -7,21 +7,76 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <div class="app">
+  <div id="setup-view" class="app setup-app">
+    <header class="header">
+      <div class="header-main">
+        <h1>Pygenesis ResolveExpert</h1>
+        <p class="subtitle">Asistente de instalacion</p>
+      </div>
+      <div class="indicator indicator-pending">Setup</div>
+    </header>
+
+    <main class="setup-main">
+      <p class="setup-intro">
+        Esta app comprueba que tienes en el equipo e instala lo que falte
+        (runtime, modelo desde Hugging Face, plugin de Resolve).
+      </p>
+      <p class="setup-intro setup-intro-muted">
+        Necesitas <a href="#" id="setup-python-help">Python 3.10+</a> en PATH
+        y conexion a Internet para el modelo.
+      </p>
+
+      <div id="setup-summary" class="setup-summary setup-summary-warn" role="status">
+        Comprobando componentes...
+      </div>
+
+      <div id="setup-checklist" class="setup-checklist" aria-live="polite"></div>
+
+      <div class="setup-actions">
+        <button type="button" id="setup-install-btn" class="send-btn setup-btn-primary">
+          Instalar lo que falta
+        </button>
+        <button type="button" id="setup-backend-btn" class="banner-btn setup-btn">
+          Arrancar puente
+        </button>
+        <button type="button" id="setup-refresh-btn" class="banner-btn setup-btn">
+          Actualizar estado
+        </button>
+        <button type="button" id="setup-continue-btn" class="send-btn setup-btn-primary" disabled>
+          Continuar al chat
+        </button>
+      </div>
+
+      <label class="setup-log-label" for="setup-log">Registro</label>
+      <pre id="setup-log" class="setup-log" aria-live="polite"></pre>
+    </main>
+
+    <div class="status-bar">
+      <span>Modelo: SuNavar/Pygenesis_ResolveExpert</span>
+      <span>Companion v0.2.0</span>
+    </div>
+  </div>
+
+  <div id="chat-view" class="app hidden">
     <header class="header">
       <div class="header-main">
         <h1>Pygenesis Companion</h1>
         <p class="subtitle">Asistente para DaVinci Resolve Free y Studio</p>
       </div>
-      <div id="resolve-indicator" class="indicator indicator-companion" title="Contexto manual">
-        Manual
+      <div class="header-actions">
+        <button type="button" id="open-setup-btn" class="banner-btn setup-gear" title="Instalacion y estado">
+          Setup
+        </button>
+        <div id="resolve-indicator" class="indicator indicator-companion" title="Contexto manual">
+          Manual
+        </div>
       </div>
     </header>
 
     <section class="context-toolbar" aria-label="Contexto del proyecto">
       <label class="toolbar-field">
-        <span class="toolbar-label">Página en Resolve</span>
-        <select id="page-select" class="toolbar-select" aria-label="Página activa">
+        <span class="toolbar-label">Pagina en Resolve</span>
+        <select id="page-select" class="toolbar-select" aria-label="Pagina activa">
           <option value="edit" selected>Edit</option>
           <option value="media">Media</option>
           <option value="cut">Cut</option>
@@ -55,8 +110,8 @@
       <div class="message message-assistant welcome">
         <div class="message-label">Pygenesis</div>
         <div class="message-body markdown-body">
-          <p>Hola. Indica arriba en qué página de Resolve estás trabajando y pregúntame sobre edición, Color, Fusion, Fairlight o Deliver.</p>
-          <p><em>Ejemplo:</em> ¿Cómo activo proxies para editar material 4K?</p>
+          <p>Hola. Indica arriba en que pagina de Resolve estas trabajando y preguntame sobre edicion, Color, Fusion, Fairlight o Deliver.</p>
+          <p><em>Ejemplo:</em> Como activo proxies para editar material 4K?</p>
         </div>
       </div>
     </main>
@@ -76,7 +131,7 @@
 
     <div class="status-bar">
       <span id="model-status">Puente: localhost:8000</span>
-      <span id="plugin-version">Companion v0.1.0</span>
+      <span id="plugin-version">Companion v0.2.0</span>
     </div>
   </div>
 
@@ -84,6 +139,7 @@
   <script src="js/companion-context.js"></script>
   <script src="js/chat-api.js"></script>
   <script src="js/chat-ui.js"></script>
+  <script src="js/setup-ui.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

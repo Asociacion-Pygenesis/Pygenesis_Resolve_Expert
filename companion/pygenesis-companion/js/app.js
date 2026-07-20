@@ -8,14 +8,17 @@
     el.className = "indicator indicator-companion";
     el.textContent = "Manual";
     el.title =
-      "Contexto manual — selecciona la página en la que trabajas en Resolve";
+      "Contexto manual — selecciona la pagina en la que trabajas en Resolve";
   }
 
   document.addEventListener("DOMContentLoaded", function () {
     if (window.ResolveContext && window.ResolveContext.init) {
       window.ResolveContext.init();
     }
-    if (window.ChatUI) {
+    // ChatUI.init se llama desde SetupUI cuando el entorno esta listo
+    if (window.SetupUI && window.SetupUI.init) {
+      window.SetupUI.init();
+    } else if (window.ChatUI) {
       window.ChatUI.init();
     }
     setCompanionIndicator();

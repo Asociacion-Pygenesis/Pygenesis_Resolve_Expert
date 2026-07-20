@@ -89,3 +89,7 @@ huggingface/
 **/WorkflowIntegration.node
 plugin/**/node_modules/
 companion/**/node_modules/
+
+# --- Builds de Companion / instaladores (usar GitLab Releases) ---
+*.exe
+companion/dist/

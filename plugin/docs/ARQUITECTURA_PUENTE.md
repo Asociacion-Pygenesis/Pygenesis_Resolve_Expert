@@ -54,8 +54,9 @@ Variables:
 
 - Archivo: `pygenesis-resolve-q4km.gguf`
 - Ubicación por defecto: `%LOCALAPPDATA%\Pygenesis\models\`
+- Repo HF: `SuNavar/Pygenesis_ResolveExpert`
 - Distribución: Hugging Face (ver `installer/model.source.json`)
-- Instalador: `installer/install_pygenesis.ps1`
+- Instalador: `Install.bat` / `installer/install_pygenesis.ps1`
 
 ---
 

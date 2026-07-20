@@ -317,7 +317,16 @@
     }
   }
 
+  var initialized = false;
+
   function init() {
+    if (initialized) {
+      refreshConnection();
+      refreshResolveContextDisplay();
+      return;
+    }
+    initialized = true;
+
     elements.messages = document.getElementById("chat-messages");
     elements.input = document.getElementById("user-input");
     elements.sendBtn = document.getElementById("send-btn");
