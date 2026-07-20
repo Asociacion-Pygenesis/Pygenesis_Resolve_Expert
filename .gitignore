@@ -5,13 +5,15 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# --- IDEs y herramientas locales ---
+# --- IDEs / editores ---
 .idea/
+.vscode/
 *.sublime-project
 *.sublime-workspace
 .cursor/
+*.code-workspace
 
-# --- Python (cualquier carpeta del repo) ---
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
@@ -31,65 +33,108 @@ coverage.xml
 *.cover
 .hypothesis/
 .tox/
+*.pyo
 
 # Entornos virtuales
 .venv/
 venv/
 ENV/
 env/
+training/.venv/
+
+# --- Node / Electron ---
+node_modules/
+npm-debug.log*
+yarn-error.log*
+companion/**/node_modules/
+plugin/**/node_modules/
+companion/dist/
+companion/pygenesis-companion/dist/
 
 # --- Secretos y config local ---
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+credentials.json
+token.json
 
-# --- Jupyter ---
+# --- Jupyter / notebooks locales ---
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
 # --- ML / experimentos ---
 wandb/
 mlruns/
+runs/
+outputs/
+lightning_logs/
 
-# --- Pesos, modelos y artefactos grandes (no versionar) ---
-# GGUF (Ollama / llama.cpp)
+# --- Modelos y artefactos grandes (NO versionar) ---
 *.gguf
-
-# HuggingFace merged / safetensors
 *.safetensors
 *.safetensors.index.json
-
-# Cuantización y binarios de modelo
 *.bin
+*.pt
+*.pth
+*.onnx
+*.ckpt
 !**/.gitkeep
 
-# Carpetas típicas del pipeline ResolveExpert
+# Carpetas tipicas del pipeline
 modelos/
 qwen-resolve-merged/
 qwen-coder-resolve/
 qwen-coder-resolve-lora/
 pygenesis-resolve-merged/
 llama.cpp/
-
-# Checkpoints y adaptadores (Colab o entrenamiento local)
 **/checkpoints/
 **/lora-adapters/
-
-# Logs de conversión / scripts pesados
 conversion/*.log
 
-# Caché HuggingFace si se crea dentro del repo
+# Cache Hugging Face / Ollama locales
 .cache/
 huggingface/
+.ollama/
+
+# --- Datos de entrenamiento grandes / generados ---
+training/data/raw/
+training/data/cache/
+training/**/*.zip
+training/**/*.parquet
+
+# Mantener ejemplos pequenos si existen
+!training/templates/
+!training/config/*.example.json
 
 # --- Proyectos Resolve locales ---
 *.drp
+*.dra
+*.drt
 
-# --- Plugin Resolve (binario del SDK, no versionar) ---
+# --- Plugin Resolve (binario SDK) ---
 **/WorkflowIntegration.node
-plugin/**/node_modules/
-companion/**/node_modules/
 
-# --- Builds de Companion / instaladores (usar GitLab Releases) ---
+# --- Builds / instaladores (usar GitHub Releases) ---
 *.exe
-companion/dist/
+*.msi
+*.dmg
+*.AppImage
+*.zip
+!training/scripts/*.zip
+dist/
+release/
+releases/
+
+# --- Logs y temporales ---
+*.log
+*.tmp
+*.temp
+*.swp
+*~
+.DS_Store
+
+# --- Sistema Pygenesis en LocalAppData (si se enlaza al repo) ---
+.bridge.env
+bridge.env
