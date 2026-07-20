@@ -22,54 +22,108 @@ param(
     [string]$PythonExe = ""
 )
 
+function Invoke-Pip {
+    param([string[]]$PipArgs)
+
+    $argList = @("-m", "pip") + $PipArgs
+    Write-Host ("  > " + ($PipArgs -join " ")) -ForegroundColor DarkGray
+
+    $outLog = Join-Path $env:TEMP "pygenesis-pip-out.log"
+    $errLog = Join-Path $env:TEMP "pygenesis-pip-err.log"
+    Remove-Item $outLog, $errLog -Force -ErrorAction SilentlyContinue
+
+    $p = Start-Process -FilePath $VenvPython -ArgumentList $argList `
+        -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $outLog `
+        -RedirectStandardError $errLog
+
+    foreach ($f in @($outLog, $errLog)) {
+        if (Test-Path $f) {
+            Get-Content -Path $f -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+        }
+    }
+
+    if ($null -eq $p -or $null -eq $p.ExitCode) { return 1 }
+    return [int]$p.ExitCode
+}
+
+function Test-LlamaCppImport {
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & $VenvPython -c "import llama_cpp; print('llama_cpp OK', getattr(llama_cpp, '__version__', '?'))"
+    $ok = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = $prevEap
+    return $ok
+}
+
 function Install-LlamaCpp {
     param([string]$TargetBackend)
 
-    # PyPI solo publica sdist; los wheels oficiales estan en indices de abetlen.
-    # Compilar en Windows falla por MAX_PATH (vendor/llama.cpp/.../*.svelte).
-    $onlyBinary = "--only-binary=:all:"
-    $prevEap = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
+    # PyPI publica sdist (compilar en Windows = MAX_PATH). Wheels oficiales en GitHub/abetlen.
+    # NO usar --only-binary=:all: (rompe deps como typing-extensions en algunos pip).
+    $ver = "0.3.34"
+    $wheelCpu = "https://github.com/abetlen/llama-cpp-python/releases/download/v$ver/llama_cpp_python-$ver-py3-none-win_amd64.whl"
+    $wheelVulkan = "https://github.com/abetlen/llama-cpp-python/releases/download/v$ver-vulkan/llama_cpp_python-$ver-py3-none-win_amd64.whl"
+    $idxCpu = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+    $idxVulkan = "https://abetlen.github.io/llama-cpp-python/whl/vulkan"
+    $idxCuda = "https://abetlen.github.io/llama-cpp-python/whl/cu124"
 
     switch ($TargetBackend) {
         "cuda" {
             Write-Host "Instalando llama-cpp-python (wheel CUDA cu124)..." -ForegroundColor Cyan
-            & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir `
-                --extra-index-url "https://abetlen.github.io/llama-cpp-python/whl/cu124" `
-                $onlyBinary
-            $code = $LASTEXITCODE
-            $ErrorActionPreference = $prevEap
-            return $code
+            $code = Invoke-Pip @(
+                "install", "llama-cpp-python", "--upgrade", "--force-reinstall", "--no-cache-dir",
+                "--extra-index-url", $idxCuda,
+                "--only-binary=llama-cpp-python",
+                "--trusted-host", "abetlen.github.io",
+                "--trusted-host", "github.com",
+                "--trusted-host", "objects.githubusercontent.com"
+            )
+            if ($code -eq 0 -and (Test-LlamaCppImport)) { return 0 }
+            return 1
         }
         "vulkan" {
             Write-Host "Instalando llama-cpp-python (wheel Vulkan precompilado)..." -ForegroundColor Cyan
-            Write-Host "  Indice: https://abetlen.github.io/llama-cpp-python/whl/vulkan" -ForegroundColor DarkGray
-            & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir `
-                --extra-index-url "https://abetlen.github.io/llama-cpp-python/whl/vulkan" `
-                $onlyBinary
-            $code = $LASTEXITCODE
-            if ($code -ne 0) {
-                Write-Host "No se pudo instalar el wheel Vulkan." -ForegroundColor Yellow
-            }
-            $ErrorActionPreference = $prevEap
-            return $code
+            Write-Host "  URL: $wheelVulkan" -ForegroundColor DarkGray
+            $code = Invoke-Pip @("install", "--upgrade", "--force-reinstall", "--no-cache-dir", $wheelVulkan)
+            if ($code -eq 0 -and (Test-LlamaCppImport)) { return 0 }
+
+            Write-Host "Reintento via indice abetlen (vulkan)..." -ForegroundColor Yellow
+            $code = Invoke-Pip @(
+                "install", "llama-cpp-python", "--upgrade", "--force-reinstall", "--no-cache-dir",
+                "--extra-index-url", $idxVulkan,
+                "--only-binary=llama-cpp-python",
+                "--trusted-host", "abetlen.github.io",
+                "--trusted-host", "github.com",
+                "--trusted-host", "objects.githubusercontent.com"
+            )
+            if ($code -eq 0 -and (Test-LlamaCppImport)) { return 0 }
+
+            Write-Host "No se pudo instalar el wheel Vulkan." -ForegroundColor Yellow
+            return 1
         }
         default {
             Write-Host "Instalando llama-cpp-python (wheel CPU precompilado)..." -ForegroundColor Cyan
-            Write-Host "  Indice: https://abetlen.github.io/llama-cpp-python/whl/cpu" -ForegroundColor DarkGray
-            & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir `
-                --extra-index-url "https://abetlen.github.io/llama-cpp-python/whl/cpu" `
-                $onlyBinary
-            $code = $LASTEXITCODE
-            if ($code -ne 0) {
-                $ver = & $VenvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
-                Write-Host ""
-                Write-Host "No hay wheel CPU para Python $ver (hace falta 3.10-3.12)." -ForegroundColor Yellow
-                Write-Host "Borra el runtime y reinstala:" -ForegroundColor DarkGray
-                Write-Host "  Remove-Item -Recurse -Force `"$env:LOCALAPPDATA\Pygenesis\runtime`"" -ForegroundColor DarkGray
-            }
-            $ErrorActionPreference = $prevEap
-            return $code
+            Write-Host "  URL: $wheelCpu" -ForegroundColor DarkGray
+            $code = Invoke-Pip @("install", "--upgrade", "--force-reinstall", "--no-cache-dir", $wheelCpu)
+            if ($code -eq 0 -and (Test-LlamaCppImport)) { return 0 }
+
+            Write-Host "Reintento via indice abetlen (cpu)..." -ForegroundColor Yellow
+            $code = Invoke-Pip @(
+                "install", "llama-cpp-python", "--upgrade", "--force-reinstall", "--no-cache-dir",
+                "--extra-index-url", $idxCpu,
+                "--only-binary=llama-cpp-python",
+                "--trusted-host", "abetlen.github.io",
+                "--trusted-host", "github.com",
+                "--trusted-host", "objects.githubusercontent.com"
+            )
+            if ($code -eq 0 -and (Test-LlamaCppImport)) { return 0 }
+
+            $pyVer = & $VenvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+            Write-Host ""
+            Write-Host "Fallo al instalar wheel CPU (Python $pyVer). Revisa conexion a GitHub/PyPI." -ForegroundColor Yellow
+            Write-Host "  Remove-Item -Recurse -Force `"$env:LOCALAPPDATA\Pygenesis\runtime`"" -ForegroundColor DarkGray
+            return 1
         }
     }
 }
@@ -124,8 +178,8 @@ if ($Backend -eq "auto") {
 $requestedBackend = $Backend
 
 Write-Host "Instalando dependencias base del puente..." -ForegroundColor Cyan
-& $VenvPython -m pip install -r (Join-Path $BackendRoot "requirements.txt")
-if ($LASTEXITCODE -ne 0) { exit 1 }
+$reqCode = Invoke-Pip @("install", "-r", (Join-Path $BackendRoot "requirements.txt"))
+if ($reqCode -ne 0) { exit 1 }
 
 Write-Host "Instalando llama-cpp-python ($Backend)..." -ForegroundColor Cyan
 $exitCode = Install-LlamaCpp -TargetBackend $Backend
