@@ -174,38 +174,9 @@ function checkInstallerBundle(packageRoot) {
   };
 }
 
-function hasFullVulkanSdk() {
-  const roots = [];
-  if (process.env.VULKAN_SDK) roots.push(process.env.VULKAN_SDK);
-  if (fs.existsSync("C:\\VulkanSDK")) {
-    try {
-      const dirs = fs.readdirSync("C:\\VulkanSDK", { withFileTypes: true });
-      dirs
-        .filter((d) => d.isDirectory())
-        .map((d) => path.join("C:\\VulkanSDK", d.name))
-        .sort()
-        .reverse()
-        .forEach((p) => roots.push(p));
-    } catch (_) {
-      /* ignore */
-    }
-  }
-  for (const root of roots) {
-    if (!root) continue;
-    const glslc = path.join(root, "Bin", "glslc.exe");
-    const include = path.join(root, "Include", "vulkan", "vulkan.h");
-    const lib = path.join(root, "Lib", "vulkan-1.lib");
-    if (fs.existsSync(glslc) && fs.existsSync(include) && fs.existsSync(lib)) {
-      return { ok: true, path: root };
-    }
-  }
-  return { ok: false, path: null };
-}
-
 function checkGpuBackend() {
   const bridge = readBridgeEnv();
   const configured = (bridge.PYGENESIS_GPU_BACKEND || "").toLowerCase();
-  const sdk = hasFullVulkanSdk();
 
   if (configured === "cuda") {
     return {
@@ -218,33 +189,21 @@ function checkGpuBackend() {
     return {
       ok: true,
       required: false,
-      detail:
-        "Backend CPU. En AMD, GPU requiere Vulkan SDK + VS Build Tools (C++); VulkanRT no basta.",
+      detail: "Backend CPU. En AMD puedes reinstalar para probar wheel Vulkan.",
     };
   }
   if (configured === "vulkan") {
     return {
-      ok: sdk.ok,
+      ok: true,
       required: false,
-      detail: sdk.ok
-        ? "Backend Vulkan — SDK: " + sdk.path
-        : "Backend Vulkan en config, pero falta Vulkan SDK completo",
+      detail: "Backend Vulkan (wheel precompilado)",
     };
   }
 
-  // Not installed yet: informational tip for AMD laptops
-  if (sdk.ok) {
-    return {
-      ok: true,
-      required: false,
-      detail: "Vulkan SDK detectado (" + sdk.path + "). AMD podra usar GPU al instalar.",
-    };
-  }
   return {
     ok: true,
     required: false,
-    detail:
-      "Sin Vulkan SDK. NVIDIA→CUDA; AMD sin SDK→CPU automatico. SDK: https://vulkan.lunarg.com/sdk/home",
+    detail: "NVIDIA→wheel CUDA; AMD→wheel Vulkan (sin compilar). Si falla→CPU.",
   };
 }
 

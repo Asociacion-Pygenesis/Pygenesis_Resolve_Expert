@@ -15,7 +15,7 @@ App Electron para **DaVinci Resolve Free** (tambien usable en Studio). Al abrirl
 3. Pulsa **Instalar lo que falta** → **Arrancar puente** → **Continuar al chat**.
 4. En Studio, el plugin sigue en `Workspace → Workflow Integrations → Pygenesis Resolve Tutor`.
 
-**AMD:** sin Vulkan SDK completo el instalador usa **CPU** (no falla). El runtime VulkanRT no sirve; hace falta el SDK de LunarG + Build Tools (C++) para GPU.
+**AMD:** el instalador usa el **wheel Vulkan precompilado** (sin compilar ni Build Tools). Si falla, cae a CPU. El runtime Vulkan del driver suele bastar en ejecucion.
 
 El `.exe` empaqueta (via `extraResources`) `installer/`, `backend/` y `plugin/`, asi puede instalar sin clonar el repo.
 

@@ -25,129 +25,53 @@ param(
 function Install-LlamaCpp {
     param([string]$TargetBackend)
 
-    function Use-ShortTemp {
-        $shortTemp = "C:\pgbuild"
-        New-Item -ItemType Directory -Force -Path $shortTemp | Out-Null
-        $script:PrevTemp = $env:TEMP
-        $script:PrevTmp = $env:TMP
-        $env:TEMP = $shortTemp
-        $env:TMP = $shortTemp
-        Write-Host "TEMP corto: $shortTemp" -ForegroundColor DarkGray
-    }
-    function Restore-Temp {
-        if ($null -ne $script:PrevTemp) { $env:TEMP = $script:PrevTemp }
-        if ($null -ne $script:PrevTmp) { $env:TMP = $script:PrevTmp }
-    }
+    # PyPI solo publica sdist; los wheels oficiales estan en indices de abetlen.
+    # Compilar en Windows falla por MAX_PATH (vendor/llama.cpp/.../*.svelte).
+    $onlyBinary = "--only-binary=:all:"
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
 
     switch ($TargetBackend) {
         "cuda" {
-            $prevEap = $ErrorActionPreference
-            $ErrorActionPreference = "Continue"
+            Write-Host "Instalando llama-cpp-python (wheel CUDA cu124)..." -ForegroundColor Cyan
             & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir `
-                --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124 `
-                --only-binary=:all:
+                --extra-index-url "https://abetlen.github.io/llama-cpp-python/whl/cu124" `
+                $onlyBinary
             $code = $LASTEXITCODE
-            if ($code -ne 0) {
-                Write-Host "Sin wheel CUDA para este Python; intentando install estandar..." -ForegroundColor Yellow
-                Use-ShortTemp
-                & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir `
-                    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
-                $code = $LASTEXITCODE
-                Restore-Temp
-            }
             $ErrorActionPreference = $prevEap
             return $code
         }
         "vulkan" {
-            $vulkanSdk = Resolve-VulkanSdkPath
-            if (-not $vulkanSdk) {
-                Write-Host "Vulkan SDK completo no disponible." -ForegroundColor Yellow
-                return 1
-            }
-
-            Write-Host "Vulkan SDK: $vulkanSdk" -ForegroundColor DarkGray
-            Use-ShortTemp
-
-            $vulkanSdkCmake = ($vulkanSdk -replace '\\', '/')
-            $env:VULKAN_SDK = $vulkanSdk
-            $env:Path = "$vulkanSdk\Bin;$env:Path"
-            $env:CMAKE_ARGS = "-DGGML_VULKAN=on"
-            $env:CMAKE_PREFIX_PATH = $vulkanSdkCmake
-            $env:FORCE_CMAKE = "1"
-
-            $prevEap = $ErrorActionPreference
-            $ErrorActionPreference = "Continue"
-            & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir
+            Write-Host "Instalando llama-cpp-python (wheel Vulkan precompilado)..." -ForegroundColor Cyan
+            Write-Host "  Indice: https://abetlen.github.io/llama-cpp-python/whl/vulkan" -ForegroundColor DarkGray
+            & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir `
+                --extra-index-url "https://abetlen.github.io/llama-cpp-python/whl/vulkan" `
+                $onlyBinary
             $code = $LASTEXITCODE
-
             if ($code -ne 0) {
-                & $VenvPython -c "import llama_cpp" 2>$null
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Host "pip devolvio error pero llama_cpp importa OK; continuando." -ForegroundColor Yellow
-                    $code = 0
-                } else {
-                    Write-Host ""
-                    Write-Host "Fallo al compilar llama-cpp-python con Vulkan (MAX_PATH / Build Tools)." -ForegroundColor Yellow
-                    Write-Host "En la practica, para AMD suele ser mas fiable usar CPU con Python 3.12." -ForegroundColor DarkGray
-                }
+                Write-Host "No se pudo instalar el wheel Vulkan." -ForegroundColor Yellow
             }
             $ErrorActionPreference = $prevEap
-
-            Restore-Temp
-            Remove-Item Env:CMAKE_ARGS -ErrorAction SilentlyContinue
-            Remove-Item Env:CMAKE_PREFIX_PATH -ErrorAction SilentlyContinue
-            Remove-Item Env:FORCE_CMAKE -ErrorAction SilentlyContinue
             return $code
         }
         default {
-            # CPU: exigir wheel binario para no descomprimir vendor/svelte (MAX_PATH)
-            $prevEap = $ErrorActionPreference
-            $ErrorActionPreference = "Continue"
-            Write-Host "Instalando llama-cpp-python (wheel binario CPU)..." -ForegroundColor Cyan
-            & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --only-binary=:all:
+            Write-Host "Instalando llama-cpp-python (wheel CPU precompilado)..." -ForegroundColor Cyan
+            Write-Host "  Indice: https://abetlen.github.io/llama-cpp-python/whl/cpu" -ForegroundColor DarkGray
+            & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir `
+                --extra-index-url "https://abetlen.github.io/llama-cpp-python/whl/cpu" `
+                $onlyBinary
             $code = $LASTEXITCODE
             if ($code -ne 0) {
                 $ver = & $VenvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
                 Write-Host ""
-                Write-Host "No hay wheel CPU para Python $ver." -ForegroundColor Yellow
-                Write-Host "Usa Python 3.11 o 3.12, borra el runtime y reinstala:" -ForegroundColor DarkGray
+                Write-Host "No hay wheel CPU para Python $ver (hace falta 3.10-3.12)." -ForegroundColor Yellow
+                Write-Host "Borra el runtime y reinstala:" -ForegroundColor DarkGray
                 Write-Host "  Remove-Item -Recurse -Force `"$env:LOCALAPPDATA\Pygenesis\runtime`"" -ForegroundColor DarkGray
-                Write-Host "  Luego Install.bat / Companion (creara venv con 3.12 si esta instalado)." -ForegroundColor DarkGray
             }
             $ErrorActionPreference = $prevEap
             return $code
         }
     }
-}
-
-function Resolve-VulkanSdkPath {
-    $candidates = @()
-
-    if ($env:VULKAN_SDK -and (Test-Path $env:VULKAN_SDK)) {
-        $candidates += $env:VULKAN_SDK
-    }
-
-    $machineVulkan = [Environment]::GetEnvironmentVariable("VULKAN_SDK", "Machine")
-    if ($machineVulkan -and (Test-Path $machineVulkan)) {
-        $candidates += $machineVulkan
-    }
-
-    if (Test-Path "C:\VulkanSDK") {
-        $candidates += Get-ChildItem "C:\VulkanSDK" -Directory -ErrorAction SilentlyContinue |
-            Sort-Object Name -Descending |
-            ForEach-Object { $_.FullName }
-    }
-
-    foreach ($root in ($candidates | Select-Object -Unique)) {
-        $glslc = Join-Path $root "Bin\glslc.exe"
-        $include = Join-Path $root "Include\vulkan\vulkan.h"
-        $lib = Join-Path $root "Lib\vulkan-1.lib"
-        if ((Test-Path $glslc) -and (Test-Path $include) -and (Test-Path $lib)) {
-            return $root
-        }
-    }
-
-    return $null
 }
 
 $ErrorActionPreference = "Stop"
@@ -199,28 +123,6 @@ if ($Backend -eq "auto") {
 
 $requestedBackend = $Backend
 
-# AMD/Vulkan sin SDK: no intentar compilar; pasar a CPU si hay fallback
-if ($Backend -eq "vulkan" -and -not (Resolve-VulkanSdkPath)) {
-    Write-Host ""
-    Write-Host "GPU AMD/Vulkan detectada, pero no hay Vulkan SDK completo." -ForegroundColor Yellow
-    Write-Host "El runtime (VulkanRT) NO sirve para compilar llama-cpp-python." -ForegroundColor DarkGray
-    Write-Host "Para aceleracion GPU en AMD necesitas:" -ForegroundColor DarkGray
-    Write-Host "  1) LunarG Vulkan SDK (SDK Installer, no solo runtime): https://vulkan.lunarg.com/sdk/home" -ForegroundColor DarkGray
-    Write-Host "  2) Visual Studio Build Tools con 'Desarrollo de escritorio con C++'" -ForegroundColor DarkGray
-    Write-Host "  3) PowerShell nueva y: .\install_inference.ps1 -Backend vulkan" -ForegroundColor DarkGray
-    if ($AllowCpuFallback) {
-        Write-Host ""
-        Write-Host "Instalando backend CPU (funciona sin SDK; mas lento)..." -ForegroundColor Cyan
-        $Backend = "cpu"
-    } else {
-        Write-Host ""
-        Write-Host "Sin -AllowCpuFallback no se puede continuar. Opciones:" -ForegroundColor Red
-        Write-Host "  .\install_inference.ps1 -AllowCpuFallback" -ForegroundColor DarkGray
-        Write-Host "  Instala Vulkan SDK + Build Tools y repite -Backend vulkan" -ForegroundColor DarkGray
-        exit 1
-    }
-}
-
 Write-Host "Instalando dependencias base del puente..." -ForegroundColor Cyan
 & $VenvPython -m pip install -r (Join-Path $BackendRoot "requirements.txt")
 if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -230,18 +132,15 @@ $exitCode = Install-LlamaCpp -TargetBackend $Backend
 
 if ($exitCode -ne 0 -and $Backend -eq "vulkan") {
     Write-Host ""
-    Write-Host "Vulkan no se pudo compilar (SDK presente pero fallo el build)." -ForegroundColor Yellow
-    Write-Host "Revisa VS Build Tools (C++) y TEMP corto C:\pgbuild. En AMD es habitual caer a CPU." -ForegroundColor DarkGray
+    Write-Host "Wheel Vulkan no disponible o fallo la descarga." -ForegroundColor Yellow
     if ($AllowCpuFallback) {
-        Write-Host ""
         Write-Host "Fallback a CPU (wheel precompilado)..." -ForegroundColor Cyan
         $Backend = "cpu"
         $exitCode = Install-LlamaCpp -TargetBackend "cpu"
     } else {
-        Write-Host ""
         Write-Host "Opciones:" -ForegroundColor Cyan
-        Write-Host "  .\install_inference.ps1 -AllowCpuFallback   # CPU ahora (lento)" -ForegroundColor DarkGray
-        Write-Host "  Activa LongPathsEnabled + Build Tools y repite -Backend vulkan" -ForegroundColor DarkGray
+        Write-Host "  .\install_inference.ps1 -AllowCpuFallback" -ForegroundColor DarkGray
+        Write-Host "  .\install_inference.ps1 -Backend vulkan   # reintentar wheel Vulkan" -ForegroundColor DarkGray
     }
 }
 

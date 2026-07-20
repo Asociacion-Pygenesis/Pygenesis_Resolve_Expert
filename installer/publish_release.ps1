@@ -11,14 +11,14 @@
   .\installer\publish_release.ps1
 #>
 param(
-    [string]$Tag = "v0.2.3",
+    [string]$Tag = "v0.2.4",
     [string]$ExePath = ""
 )
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 if (-not $ExePath) {
-    $ExePath = Join-Path $RepoRoot "companion\dist\Pygenesis-Companion-0.2.3-portable.exe"
+    $ExePath = Join-Path $RepoRoot "companion\dist\Pygenesis-Companion-0.2.4-portable.exe"
 }
 
 if (-not (Test-Path $ExePath)) {

@@ -236,7 +236,7 @@
       els.vulkanHelp.addEventListener("click", function (e) {
         e.preventDefault();
         if (global.pygenesisSetup) {
-          global.pygenesisSetup.openExternal("https://vulkan.lunarg.com/sdk/home");
+          global.pygenesisSetup.openExternal("https://abetlen.github.io/llama-cpp-python/whl/vulkan");
         }
       });
     }
