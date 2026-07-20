@@ -34,7 +34,23 @@ function readBridgeEnv() {
 }
 
 function findSystemPython() {
-  const cmds = ["python", "python3", "py"];
+  // Prefer 3.12/3.11/3.10 (wheels for llama-cpp-python). 3.13+ forces source builds → MAX_PATH.
+  for (const ver of ["3.12", "3.11", "3.10"]) {
+    try {
+      const resolved = spawnSync("py", [`-${ver}`, "-c", "import sys; print(sys.executable)"], {
+        encoding: "utf8",
+        windowsHide: true,
+        timeout: 8000,
+      });
+      if (resolved.status === 0 && resolved.stdout && fs.existsSync(resolved.stdout.trim())) {
+        return { ok: true, path: resolved.stdout.trim(), version: ver };
+      }
+    } catch (_) {
+      /* try next */
+    }
+  }
+
+  const cmds = ["python", "python3"];
   for (const cmd of cmds) {
     try {
       const ver = spawnSync(cmd, ["-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], {
@@ -46,7 +62,7 @@ function findSystemPython() {
       const parts = ver.stdout.trim().split(".");
       const major = parseInt(parts[0], 10);
       const minor = parseInt(parts[1], 10);
-      if (major > 3 || (major === 3 && minor >= 10)) {
+      if (major === 3 && minor >= 10 && minor <= 12) {
         const resolved = spawnSync(cmd, ["-c", "import sys; print(sys.executable)"], {
           encoding: "utf8",
           windowsHide: true,
@@ -71,6 +87,27 @@ function checkRuntime() {
   candidates.push(path.join(pygenesisHome(), "runtime", "Scripts", "python.exe"));
   for (const p of candidates) {
     if (p && fs.existsSync(p)) {
+      try {
+        const ver = spawnSync(p, ["-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], {
+          encoding: "utf8",
+          windowsHide: true,
+          timeout: 8000,
+        });
+        if (ver.status === 0 && ver.stdout) {
+          const parts = ver.stdout.trim().split(".");
+          const major = parseInt(parts[0], 10);
+          const minor = parseInt(parts[1], 10);
+          if (major === 3 && minor >= 13) {
+            return {
+              ok: false,
+              path: p,
+              detail: `Python ${ver.stdout.trim()} sin wheels; reinstala (usará 3.12)`,
+            };
+          }
+        }
+      } catch (_) {
+        /* treat as present */
+      }
       return { ok: true, path: p };
     }
   }
@@ -231,17 +268,19 @@ async function runDiagnostics(packageRoot) {
   return {
     python: {
       id: "python",
-      label: "Python 3.10+",
+      label: "Python 3.10–3.12",
       ok: python.ok,
       required: true,
-      detail: python.ok ? python.version + " — " + python.path : "No encontrado en PATH",
+      detail: python.ok ? python.version + " — " + python.path : "Instala Python 3.12 (evita 3.13/3.14)",
     },
     runtime: {
       id: "runtime",
       label: "Runtime Pygenesis",
       ok: runtime.ok,
       required: true,
-      detail: runtime.ok ? runtime.path : "Falta %LOCALAPPDATA%\\Pygenesis\\runtime",
+      detail: runtime.ok
+        ? runtime.path
+        : runtime.detail || "Falta %LOCALAPPDATA%\\Pygenesis\\runtime",
     },
     model: {
       id: "model",

@@ -73,8 +73,18 @@ function Import-BridgeEnv {
 }
 
 function Get-SystemPython {
+    # Preferir 3.12 / 3.11 / 3.10: llama-cpp-python suele tener wheels; 3.13+ fuerza compile y MAX_PATH.
+    foreach ($ver in @("3.12", "3.11", "3.10")) {
+        try {
+            $resolved = & py "-$ver" -c "import sys; print(sys.executable)" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $resolved -and (Test-Path $resolved.Trim())) {
+                return $resolved.Trim()
+            }
+        } catch { }
+    }
+
     $candidates = @()
-    foreach ($cmd in @("python", "python3", "py")) {
+    foreach ($cmd in @("python", "python3")) {
         $found = Get-Command $cmd -ErrorAction SilentlyContinue
         if ($found) { $candidates += $found.Source }
     }
@@ -85,7 +95,7 @@ function Get-SystemPython {
             if ($LASTEXITCODE -ne 0 -or -not $verText) { continue }
             $parts = $verText.Trim().Split('.')
             $major = [int]$parts[0]; $minor = [int]$parts[1]
-            if ($major -gt 3 -or ($major -eq 3 -and $minor -ge 10)) {
+            if ($major -eq 3 -and $minor -ge 10 -and $minor -le 12) {
                 $resolved = & $exe -c "import sys; print(sys.executable)" 2>$null
                 if ($LASTEXITCODE -eq 0 -and $resolved -and (Test-Path $resolved.Trim())) {
                     return $resolved.Trim()
@@ -97,19 +107,35 @@ function Get-SystemPython {
     return $null
 }
 
+function Get-PythonMinorVersion {
+    param([string]$PythonExe)
+    try {
+        $v = & $PythonExe -c "import sys; print(sys.version_info.minor)" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $v) { return [int]$v.Trim() }
+    } catch { }
+    return -1
+}
+
 function Ensure-RuntimeVenv {
     if (Test-Path $RuntimePython) {
-        Write-Host "Runtime ya presente: $RuntimePython" -ForegroundColor Green
-        return $RuntimePython
+        $minor = Get-PythonMinorVersion -PythonExe $RuntimePython
+        if ($minor -ge 0 -and $minor -le 12) {
+            Write-Host "Runtime ya presente (Python 3.$minor): $RuntimePython" -ForegroundColor Green
+            return $RuntimePython
+        }
+        Write-Host "Runtime usa Python 3.$minor; llama-cpp-python no suele tener wheels -> MAX_PATH al compilar." -ForegroundColor Yellow
+        Write-Host "Recreando runtime con Python 3.12/3.11..." -ForegroundColor Cyan
+        Remove-Item $RuntimeDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     $sysPy = Get-SystemPython
     if (-not $sysPy) {
-        throw "Se necesita Python 3.10+ en PATH. Instálalo desde https://www.python.org/downloads/ (marca 'Add python.exe to PATH')."
+        throw "Se necesita Python 3.10-3.12 en PATH (recomendado 3.12). Evita 3.13/3.14 para el runtime. https://www.python.org/downloads/"
     }
 
+    $sysMinor = Get-PythonMinorVersion -PythonExe $sysPy
     Write-Host "Creando runtime en $RuntimeDir ..." -ForegroundColor Cyan
-    Write-Host "  Base: $sysPy" -ForegroundColor DarkGray
+    Write-Host "  Base: $sysPy (3.$sysMinor)" -ForegroundColor DarkGray
     New-Item -ItemType Directory -Force -Path $PygenesisHome | Out-Null
     & $sysPy -m venv $RuntimeDir
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $RuntimePython)) {

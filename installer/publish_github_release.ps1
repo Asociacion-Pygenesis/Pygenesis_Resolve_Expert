@@ -5,10 +5,10 @@
 
 .EXAMPLE
   .\installer\publish_github_release.ps1
-  .\installer\publish_github_release.ps1 -Tag v0.2.2
+  .\installer\publish_github_release.ps1 -Tag v0.2.3
 #>
 param(
-    [string]$Tag = "v0.2.2",
+    [string]$Tag = "v0.2.3",
     [string]$ExePath = "",
     [string]$Repo = "Asociacion-Pygenesis/Pygenesis_Resolve_Expert"
 )
@@ -16,7 +16,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 if (-not $ExePath) {
-    $ExePath = Join-Path $RepoRoot "companion\dist\Pygenesis-Companion-0.2.2-portable.exe"
+    $ExePath = Join-Path $RepoRoot "companion\dist\Pygenesis-Companion-0.2.3-portable.exe"
 }
 
 if (-not (Test-Path $ExePath)) {
@@ -35,12 +35,12 @@ Local DaVinci Resolve assistant with a **setup wizard** inside Companion (checks
 
 ### Requirements
 - Windows 10/11
-- Python 3.10+ on PATH
+- Python **3.10–3.12** on PATH (prefer **3.12**; avoid 3.13/3.14 — no binary wheels)
 - Internet (first model download)
 
 ### GPU
 - **NVIDIA:** CUDA wheels
-- **AMD:** full Vulkan SDK + VS Build Tools for GPU; without SDK (or if Windows MAX_PATH build fails) the installer uses **CPU automatically**. Vulkan builds use short TEMP ``C:\pgbuild``.
+- **AMD:** full Vulkan SDK + VS Build Tools for GPU; without SDK (or if Windows MAX_PATH build fails) the installer uses **CPU binary wheel** automatically. Runtime is recreated if it was created with Python 3.13+.
 
 ### Usage
 1. Run the portable ``.exe``

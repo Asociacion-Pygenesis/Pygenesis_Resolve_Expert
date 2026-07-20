@@ -15,7 +15,7 @@ El modelo es el mismo en ambos casos. En Studio el contexto (página/proyecto/ti
 
 ## Inicio rápido (usuarios)
 
-**Requisitos:** Windows 10/11, [Python 3.10+](https://www.python.org/downloads/) en PATH, Internet (primera descarga del modelo).
+**Requisitos:** Windows 10/11, [Python 3.10–3.12](https://www.python.org/downloads/) en PATH (recomendado **3.12**; evita 3.13/3.14), Internet (primera descarga del modelo).
 
 1. Descarga **Pygenesis Companion** desde [GitHub Releases](https://github.com/Asociacion-Pygenesis/Pygenesis_Resolve_Expert/releases).
 2. Ejecuta el `.exe` portable.

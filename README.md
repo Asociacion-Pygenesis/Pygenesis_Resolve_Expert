@@ -15,7 +15,7 @@ Same model in both cases. Studio can pass page/project/timeline context automati
 
 ## Quick start (end users)
 
-**Requirements:** Windows 10/11, [Python 3.10+](https://www.python.org/downloads/) on PATH, internet (first model download).
+**Requirements:** Windows 10/11, [Python 3.10–3.12](https://www.python.org/downloads/) on PATH (prefer **3.12**; avoid 3.13/3.14), internet (first model download).
 
 1. Download **Pygenesis Companion** from [GitHub Releases](https://github.com/Asociacion-Pygenesis/Pygenesis_Resolve_Expert/releases).
 2. Run the portable `.exe`.

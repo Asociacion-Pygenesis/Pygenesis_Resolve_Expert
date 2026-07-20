@@ -5,7 +5,7 @@ Instalador cerrado de **Pygenesis ResolveExpert** para Windows. El modelo GGUF s
 ## Requisitos
 
 - Windows 10/11
-- [Python 3.10+](https://www.python.org/downloads/) en PATH (marca *Add python.exe to PATH*)
+- [Python 3.10–3.12](https://www.python.org/downloads/) en PATH (recomendado **3.12**; evita 3.13/3.14: no hay wheels de `llama-cpp-python`)
 - Conexión a Internet (descarga del modelo `pygenesis-resolve-q4km.gguf`)
 - DaVinci Resolve Studio (plugin) y/o Free (Companion)
 

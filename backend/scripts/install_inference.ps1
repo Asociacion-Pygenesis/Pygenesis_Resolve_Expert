@@ -24,11 +24,39 @@ param(
 
 function Install-LlamaCpp {
     param([string]$TargetBackend)
+
+    function Use-ShortTemp {
+        $shortTemp = "C:\pgbuild"
+        New-Item -ItemType Directory -Force -Path $shortTemp | Out-Null
+        $script:PrevTemp = $env:TEMP
+        $script:PrevTmp = $env:TMP
+        $env:TEMP = $shortTemp
+        $env:TMP = $shortTemp
+        Write-Host "TEMP corto: $shortTemp" -ForegroundColor DarkGray
+    }
+    function Restore-Temp {
+        if ($null -ne $script:PrevTemp) { $env:TEMP = $script:PrevTemp }
+        if ($null -ne $script:PrevTmp) { $env:TMP = $script:PrevTmp }
+    }
+
     switch ($TargetBackend) {
         "cuda" {
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
             & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir `
-                --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
-            return $LASTEXITCODE
+                --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124 `
+                --only-binary=:all:
+            $code = $LASTEXITCODE
+            if ($code -ne 0) {
+                Write-Host "Sin wheel CUDA para este Python; intentando install estandar..." -ForegroundColor Yellow
+                Use-ShortTemp
+                & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir `
+                    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+                $code = $LASTEXITCODE
+                Restore-Temp
+            }
+            $ErrorActionPreference = $prevEap
+            return $code
         }
         "vulkan" {
             $vulkanSdk = Resolve-VulkanSdkPath
@@ -38,14 +66,7 @@ function Install-LlamaCpp {
             }
 
             Write-Host "Vulkan SDK: $vulkanSdk" -ForegroundColor DarkGray
-            # pip + vendor/llama.cpp crea rutas enorme (svelte UI); en Windows falla sin TEMP corto.
-            $shortTemp = "C:\pgbuild"
-            New-Item -ItemType Directory -Force -Path $shortTemp | Out-Null
-            $prevTemp = $env:TEMP
-            $prevTmp = $env:TMP
-            $env:TEMP = $shortTemp
-            $env:TMP = $shortTemp
-            Write-Host "TEMP corto para build: $shortTemp (evita MAX_PATH en Windows)" -ForegroundColor DarkGray
+            Use-ShortTemp
 
             $vulkanSdkCmake = ($vulkanSdk -replace '\\', '/')
             $env:VULKAN_SDK = $vulkanSdk
@@ -66,26 +87,35 @@ function Install-LlamaCpp {
                     $code = 0
                 } else {
                     Write-Host ""
-                    Write-Host "Fallo al compilar llama-cpp-python con Vulkan." -ForegroundColor Yellow
-                    Write-Host "Causas frecuentes en Windows:" -ForegroundColor DarkGray
-                    Write-Host "  - Rutas demasiado largas (MAX_PATH) al descomprimir vendor/llama.cpp" -ForegroundColor DarkGray
-                    Write-Host "  - Falta VS Build Tools (C++)" -ForegroundColor DarkGray
-                    Write-Host "Opcional: activa rutas largas (admin) y reintenta:" -ForegroundColor DarkGray
-                    Write-Host "  New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force" -ForegroundColor DarkGray
+                    Write-Host "Fallo al compilar llama-cpp-python con Vulkan (MAX_PATH / Build Tools)." -ForegroundColor Yellow
+                    Write-Host "En la practica, para AMD suele ser mas fiable usar CPU con Python 3.12." -ForegroundColor DarkGray
                 }
             }
             $ErrorActionPreference = $prevEap
 
-            if ($prevTemp) { $env:TEMP = $prevTemp } else { Remove-Item Env:TEMP -ErrorAction SilentlyContinue }
-            if ($prevTmp) { $env:TMP = $prevTmp } else { Remove-Item Env:TMP -ErrorAction SilentlyContinue }
+            Restore-Temp
             Remove-Item Env:CMAKE_ARGS -ErrorAction SilentlyContinue
             Remove-Item Env:CMAKE_PREFIX_PATH -ErrorAction SilentlyContinue
             Remove-Item Env:FORCE_CMAKE -ErrorAction SilentlyContinue
             return $code
         }
         default {
-            & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir
-            return $LASTEXITCODE
+            # CPU: exigir wheel binario para no descomprimir vendor/svelte (MAX_PATH)
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            Write-Host "Instalando llama-cpp-python (wheel binario CPU)..." -ForegroundColor Cyan
+            & $VenvPython -m pip install llama-cpp-python --upgrade --force-reinstall --only-binary=:all:
+            $code = $LASTEXITCODE
+            if ($code -ne 0) {
+                $ver = & $VenvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+                Write-Host ""
+                Write-Host "No hay wheel CPU para Python $ver." -ForegroundColor Yellow
+                Write-Host "Usa Python 3.11 o 3.12, borra el runtime y reinstala:" -ForegroundColor DarkGray
+                Write-Host "  Remove-Item -Recurse -Force `"$env:LOCALAPPDATA\Pygenesis\runtime`"" -ForegroundColor DarkGray
+                Write-Host "  Luego Install.bat / Companion (creara venv con 3.12 si esta instalado)." -ForegroundColor DarkGray
+            }
+            $ErrorActionPreference = $prevEap
+            return $code
         }
     }
 }
@@ -145,6 +175,19 @@ if (-not $VenvPython) {
     exit 1
 }
 Write-Host "Python: $VenvPython" -ForegroundColor DarkGray
+
+$pyVerText = & $VenvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+if ($LASTEXITCODE -eq 0 -and $pyVerText) {
+    $pyParts = $pyVerText.Trim().Split('.')
+    $pyMinor = [int]$pyParts[1]
+    if ($pyMinor -ge 13) {
+        Write-Host ""
+        Write-Host "Python $($pyVerText.Trim()) no tiene wheels de llama-cpp-python -> pip intenta compilar y falla por MAX_PATH." -ForegroundColor Yellow
+        Write-Host "Borra el runtime y reinstala (el instalador preferira 3.12/3.11):" -ForegroundColor DarkGray
+        Write-Host "  Remove-Item -Recurse -Force `"$env:LOCALAPPDATA\Pygenesis\runtime`"" -ForegroundColor DarkGray
+        exit 1
+    }
+}
 
 $detectedGpuName = ""
 if ($Backend -eq "auto") {

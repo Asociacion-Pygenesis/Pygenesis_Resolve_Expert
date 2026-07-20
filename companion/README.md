@@ -6,7 +6,7 @@ App Electron para **DaVinci Resolve Free** (tambien usable en Studio). Al abrirl
 
 1. Descarga el release / ejecuta el `.exe` portable de Companion (o `npm start` en desarrollo).
 2. La app muestra el estado:
-   - Python 3.10+
+   - Python 3.10–3.12 (recomendado 3.12; evita 3.13/3.14)
    - Runtime Pygenesis
    - Modelo GGUF (Hugging Face)
    - Aceleracion GPU (CUDA / Vulkan SDK / CPU)
