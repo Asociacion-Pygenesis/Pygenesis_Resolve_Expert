@@ -57,8 +57,13 @@ Asistente local para DaVinci Resolve. Descarga el ``.exe``, pulsa **Instalar lo 
 Push-Location $RepoRoot
 try {
     Write-Host "Creando GitHub Release $Tag en $Repo ..." -ForegroundColor Cyan
-    gh release view $Tag --repo $Repo 2>$null
-    if ($LASTEXITCODE -eq 0) {
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    gh release view $Tag --repo $Repo 2>$null | Out-Null
+    $exists = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = $prevEap
+
+    if ($exists) {
         Write-Host "El release $Tag ya existe; subiendo/reemplazando asset..." -ForegroundColor Yellow
         gh release upload $Tag $ExePath --repo $Repo --clobber
     } else {
