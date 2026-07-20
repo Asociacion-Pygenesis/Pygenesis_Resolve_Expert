@@ -5,10 +5,10 @@
 
 .EXAMPLE
   .\installer\publish_github_release.ps1
-  .\installer\publish_github_release.ps1 -Tag v0.2.0
+  .\installer\publish_github_release.ps1 -Tag v0.2.1
 #>
 param(
-    [string]$Tag = "v0.2.0",
+    [string]$Tag = "v0.2.1",
     [string]$ExePath = "",
     [string]$Repo = "Asociacion-Pygenesis/Pygenesis_Resolve_Expert"
 )
@@ -16,7 +16,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 if (-not $ExePath) {
-    $ExePath = Join-Path $RepoRoot "companion\dist\Pygenesis-Companion-0.2.0-portable.exe"
+    $ExePath = Join-Path $RepoRoot "companion\dist\Pygenesis-Companion-0.2.1-portable.exe"
 }
 
 if (-not (Test-Path $ExePath)) {
@@ -38,6 +38,10 @@ Local DaVinci Resolve assistant with a **setup wizard** inside Companion (checks
 - Python 3.10+ on PATH
 - Internet (first model download)
 
+### GPU
+- **NVIDIA:** CUDA wheels
+- **AMD:** full Vulkan SDK + VS Build Tools for GPU; without SDK the installer uses **CPU automatically** (VulkanRT alone is not enough)
+
 ### Usage
 1. Run the portable ``.exe``
 2. Click **Install what's missing**
@@ -51,7 +55,7 @@ Code lives in the repository; the ``.exe`` is only published via Releases (not i
 
 ## Espanol
 
-Asistente local para DaVinci Resolve. Descarga el ``.exe``, pulsa **Instalar lo que falta**, arranca el puente y continua al chat. El modelo se descarga desde Hugging Face.
+Asistente local para DaVinci Resolve. Descarga el ``.exe``, pulsa **Instalar lo que falta**, arranca el puente y continua al chat. En AMD sin Vulkan SDK completo la instalacion continua en CPU (no es un error).
 "@ | Set-Content -Path $notesFile -Encoding UTF8
 
 Push-Location $RepoRoot
