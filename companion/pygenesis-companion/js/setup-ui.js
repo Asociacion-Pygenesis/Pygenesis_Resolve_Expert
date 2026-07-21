@@ -153,16 +153,48 @@
       if (!result.ok) {
         appendLog("No se pudo arrancar: " + (result.error || "error"));
       } else {
-        appendLog("Esperando health del puente...");
-        for (var i = 0; i < 15; i++) {
+        if (result.script) appendLog("Script: " + result.script);
+        if (result.logPath) appendLog("Log: " + result.logPath);
+        appendLog("Esperando health del puente (el modelo puede tardar 1-3 min)...");
+        var ready = false;
+        for (var i = 0; i < 120; i++) {
           await new Promise(function (r) {
             setTimeout(r, 1000);
           });
           var st = await refresh();
           if (st && st.bridge && st.bridge.ok) {
-            appendLog("Puente activo.");
+            var d = st.bridge.detail || {};
+            if (d.status === "starting") {
+              if (i % 5 === 0) {
+                appendLog(
+                  "Cargando... " +
+                    (d.startup_detail || d.startup_phase || "modelo") +
+                    " (" +
+                    (i + 1) +
+                    "s)"
+                );
+              }
+              continue;
+            }
+            if (d.model_loaded || d.status === "ok") {
+              appendLog("Puente activo (modelo listo).");
+            } else {
+              appendLog(
+                "Puente activo. Modelo: " +
+                  (d.error || d.startup_detail || "pendiente")
+              );
+            }
+            ready = true;
             break;
           }
+          if (i > 0 && i % 10 === 0) {
+            appendLog("Aun sin respuesta en :8000 (" + (i + 1) + "s)...");
+          }
+        }
+        if (!ready) {
+          appendLog(
+            "El puente no respondio a tiempo. Abre el log o ejecuta Pygenesis Backend en el menu Inicio."
+          );
         }
       }
     } catch (err) {

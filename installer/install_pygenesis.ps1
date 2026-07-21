@@ -54,11 +54,24 @@ $BridgeEnv = Join-Path $PygenesisHome "bridge.env"
 
 function Set-BridgeEnvValue {
     param([string]$Path, [string]$Name, [string]$Value)
+    # Evitar valores multilinea / basura de pip mezclada en PowerShell returns
+    $clean = ([string]$Value).Trim()
+    if ($Name -eq "PYGENESIS_PYTHON") {
+        if ($clean -match '(?i)((?:[A-Za-z]:\\|\\\\)[^\r\n]*python\.exe)\s*$') {
+            $clean = $Matches[1].Trim()
+        }
+        if ($clean -notmatch '(?i)\.exe$') {
+            throw "PYGENESIS_PYTHON invalido (no es una ruta .exe): $clean"
+        }
+    }
+    if ($clean -match "[\r\n]") {
+        throw "Valor de bridge.env invalido para ${Name}: contiene saltos de linea"
+    }
     $lines = @()
     if (Test-Path $Path) {
         $lines = @(Get-Content $Path | Where-Object { $_ -notmatch "^\s*$([regex]::Escape($Name))\s*=" })
     }
-    $lines += "$Name=$Value"
+    $lines += "$Name=$clean"
     New-Item -ItemType Directory -Force -Path (Split-Path $Path -Parent) | Out-Null
     $lines | Set-Content -Path $Path -Encoding UTF8
 }
@@ -141,8 +154,12 @@ function Ensure-RuntimeVenv {
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $RuntimePython)) {
         throw "No se pudo crear el venv en $RuntimeDir"
     }
-    & $RuntimePython -m pip install --upgrade pip
-    return $RuntimePython
+    # Critico: redirigir salida de pip; si no, PowerShell la mezcla en el return de la funcion.
+    & $RuntimePython -m pip install --upgrade pip 2>&1 | ForEach-Object { Write-Host $_ }
+    if (-not (Test-Path $RuntimePython)) {
+        throw "Runtime python desaparecio tras pip upgrade: $RuntimePython"
+    }
+    return [string]$RuntimePython
 }
 
 function Sync-AppPayload {

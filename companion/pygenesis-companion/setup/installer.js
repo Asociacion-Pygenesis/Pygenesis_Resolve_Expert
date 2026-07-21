@@ -70,20 +70,21 @@ function runInstall(packageRoot, hooks) {
 }
 
 function resolveBackendStart(packageRoot) {
-  const homeStart = path.join(pygenesisHome(), "Start-Backend.ps1");
-  if (fs.existsSync(homeStart)) return homeStart;
+  // Preferir el backend embebido en Companion (siempre coincide con la version del .exe)
+  const pkgStart = path.join(packageRoot, "backend", "scripts", "start_backend.ps1");
+  if (packageRoot && fs.existsSync(pkgStart)) return pkgStart;
 
   const appStart = path.join(pygenesisHome(), "app", "backend", "scripts", "start_backend.ps1");
   if (fs.existsSync(appStart)) return appStart;
 
-  const pkgStart = path.join(packageRoot, "backend", "scripts", "start_backend.ps1");
-  if (fs.existsSync(pkgStart)) return pkgStart;
+  const homeStart = path.join(pygenesisHome(), "Start-Backend.ps1");
+  if (fs.existsSync(homeStart)) return homeStart;
 
   return null;
 }
 
 /**
- * Start bridge in background (detached).
+ * Start bridge in background; log to %LOCALAPPDATA%\Pygenesis\logs\backend.log
  */
 function startBackend(packageRoot, hooks) {
   const script = resolveBackendStart(packageRoot);
@@ -94,6 +95,15 @@ function startBackend(packageRoot, hooks) {
     return Promise.resolve({ ok: true, already: true, script });
   }
 
+  const logDir = path.join(pygenesisHome(), "logs");
+  fs.mkdirSync(logDir, { recursive: true });
+  const logPath = path.join(logDir, "backend.log");
+  const logFd = fs.openSync(logPath, "a");
+  fs.writeSync(
+    logFd,
+    "\n==== " + new Date().toISOString() + " start " + script + " ====\n"
+  );
+
   return new Promise((resolve, reject) => {
     const child = spawn(
       powershellExe(),
@@ -102,18 +112,25 @@ function startBackend(packageRoot, hooks) {
         cwd: path.dirname(script),
         windowsHide: true,
         detached: true,
-        stdio: "ignore",
+        stdio: ["ignore", logFd, logFd],
         env: process.env,
       }
     );
-    child.on("error", (err) => reject(err));
+    child.on("error", (err) => {
+      try {
+        fs.closeSync(logFd);
+      } catch (_) {
+        /* ignore */
+      }
+      reject(err);
+    });
     child.unref();
     backendProc = child;
     if (hooks && hooks.onLine) {
       hooks.onLine("Puente arrancado: " + script);
+      hooks.onLine("Log: " + logPath);
     }
-    // Give uvicorn a moment; health check is done by UI
-    setTimeout(() => resolve({ ok: true, already: false, script }), 1500);
+    setTimeout(() => resolve({ ok: true, already: false, script, logPath }), 1500);
   });
 }
 

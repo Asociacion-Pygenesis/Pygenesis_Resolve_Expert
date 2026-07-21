@@ -31,8 +31,16 @@ if (Test-Path $BridgeEnv) {
 }
 
 function Resolve-PygenesisPython {
-    if ($env:PYGENESIS_PYTHON -and (Test-Path $env:PYGENESIS_PYTHON)) {
-        return $env:PYGENESIS_PYTHON
+    if ($env:PYGENESIS_PYTHON) {
+        $candidate = $env:PYGENESIS_PYTHON.Trim()
+        # bridge.env corrupto a veces mezcla salida de pip + ruta
+        if ($candidate -match '(?i)((?:[A-Za-z]:\\|\\\\)[^\r\n]*python\.exe)\s*$') {
+            $candidate = $Matches[1].Trim()
+        }
+        if (($candidate -match '(?i)\.exe$') -and (Test-Path -LiteralPath $candidate)) {
+            return $candidate
+        }
+        Write-Host "PYGENESIS_PYTHON invalido; usando runtime por defecto." -ForegroundColor Yellow
     }
     $runtime = Join-Path $env:LOCALAPPDATA "Pygenesis\runtime\Scripts\python.exe"
     if (Test-Path $runtime) { return $runtime }

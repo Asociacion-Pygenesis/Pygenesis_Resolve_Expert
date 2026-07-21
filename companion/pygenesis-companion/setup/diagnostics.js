@@ -150,7 +150,11 @@ function checkBridgeHealth(port) {
       res.on("end", () => {
         try {
           const data = JSON.parse(body);
-          resolve({ ok: res.statusCode === 200 && data.status === "ok", detail: data });
+          const status = (data.status || "").toLowerCase();
+          const up =
+            res.statusCode === 200 &&
+            (status === "ok" || status === "degraded" || status === "starting");
+          resolve({ ok: up, detail: data });
         } catch (_) {
           resolve({ ok: false, detail: null });
         }
@@ -271,7 +275,15 @@ async function runDiagnostics(packageRoot) {
       label: "Puente (localhost:8000)",
       ok: bridge.ok,
       required: true,
-      detail: bridge.ok ? "Activo" : "No esta en marcha (puedes arrancarlo desde aqui)",
+      detail: (() => {
+        if (!bridge.ok) return "No esta en marcha (puedes arrancarlo desde aqui)";
+        const d = bridge.detail || {};
+        if (d.status === "starting") {
+          return "Cargando... " + (d.startup_detail || d.startup_phase || "modelo");
+        }
+        if (d.model_loaded) return "Activo";
+        return "Activo (modelo pendiente: " + (d.error || d.startup_detail || "?") + ")";
+      })(),
     },
     bundle: {
       id: "bundle",

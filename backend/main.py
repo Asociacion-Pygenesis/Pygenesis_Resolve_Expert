@@ -6,17 +6,15 @@ import asyncio
 import json
 import pickle
 import re
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
-from threading import Thread
 
-import faiss
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer
 
 import inference
 from page_context import (
@@ -37,9 +35,10 @@ from _resolve_system import RESOLVE_SYSTEM  # noqa: E402
 BACKEND_ROOT = Path(__file__).resolve().parent
 VECTOR_DIR = BACKEND_ROOT / "vectorstore"
 
-embedder: SentenceTransformer | None = None
-indice: faiss.Index | None = None
+embedder = None
+indice = None
 fragmentos: list[dict] = []
+_startup_state = {"phase": "starting", "detail": "Inicializando"}
 
 
 def _cargar_rag() -> None:
@@ -50,7 +49,15 @@ def _cargar_rag() -> None:
         print("RAG no disponible (falta vectorstore/). El backend funcionará sin contexto.")
         return
 
+    try:
+        import faiss
+        from sentence_transformers import SentenceTransformer
+    except ImportError as exc:
+        print(f"RAG omitido (dependencias no instaladas): {exc}")
+        return
+
     print("Cargando base de conocimiento...")
+    _startup_state.update({"phase": "loading_rag", "detail": "Cargando RAG"})
     embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
     indice = faiss.read_index(str(indice_path))
     with open(fragmentos_path, "rb") as f:
@@ -58,13 +65,35 @@ def _cargar_rag() -> None:
     print(f"Base cargada: {len(fragmentos)} fragmentos")
 
 
+def _startup_worker() -> None:
+    try:
+        _cargar_rag()
+        _startup_state.update({"phase": "loading_model", "detail": "Cargando modelo GGUF"})
+        try:
+            inference.load_model()
+        except RuntimeError as exc:
+            print(f"AVISO: {exc}")
+        status = inference.get_status()
+        if status.get("loaded"):
+            _startup_state.update({"phase": "ready", "detail": "Listo"})
+        else:
+            _startup_state.update(
+                {
+                    "phase": "degraded",
+                    "detail": status.get("error") or "Modelo no cargado",
+                }
+            )
+    except Exception as exc:  # noqa: BLE001 — no tumbar el proceso del puente
+        print(f"ERROR en arranque en segundo plano: {exc}")
+        _startup_state.update({"phase": "error", "detail": str(exc)})
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    _cargar_rag()
-    try:
-        await asyncio.to_thread(inference.load_model)
-    except RuntimeError as exc:
-        print(f"AVISO: {exc}")
+    # Responder /health al instante; RAG + GGUF pueden tardar minutos.
+    _startup_state.update({"phase": "starting", "detail": "Arranque en segundo plano"})
+    worker = threading.Thread(target=_startup_worker, name="pygenesis-startup", daemon=True)
+    worker.start()
     yield
     inference.unload_model()
 
@@ -332,7 +361,7 @@ async def _stream_inference_sse(consulta: Consulta):
         except Exception as exc:
             loop.call_soon_threadsafe(queue.put_nowait, ("error", str(exc)))
 
-    Thread(target=worker, daemon=True).start()
+    threading.Thread(target=worker, daemon=True).start()
 
     while True:
         kind, data = await queue.get()
@@ -388,13 +417,24 @@ async def consultar_stream(consulta: Consulta):
 async def health():
     model_status = inference.get_status()
     ok = model_status["loaded"]
+    phase = _startup_state.get("phase") or "unknown"
+    if ok:
+        status = "ok"
+    elif phase in {"starting", "loading_rag", "loading_model"}:
+        status = "starting"
+    else:
+        status = "degraded"
     return {
-        "status": "ok" if ok else "degraded",
+        "status": status,
         "modelo": model_status["modelo"],
         "backend": model_status["backend"],
         "model_path": model_status["model_path"],
         "model_loaded": ok,
+        "startup_phase": phase,
+        "startup_detail": _startup_state.get("detail"),
         "fragmentos": len(fragmentos),
         "rag_activo": embedder is not None,
-        "error": model_status.get("error"),
+        "error": model_status.get("error") or (
+            _startup_state.get("detail") if phase == "error" else None
+        ),
     }

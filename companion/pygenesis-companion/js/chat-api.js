@@ -52,11 +52,16 @@
       }
 
       const data = await response.json();
-      var bridgeUp = data.status === "ok" || data.status === "degraded";
-      var modelLoaded = data.model_loaded !== false;
+      var bridgeUp = data.status === "ok" || data.status === "degraded" || data.status === "starting";
+      var modelLoaded = !!data.model_loaded;
       var error = null;
       if (!bridgeUp) {
         error = "Estado del puente: " + (data.status || "desconocido");
+      } else if (data.status === "starting") {
+        error =
+          "El puente esta arrancando (" +
+          (data.startup_detail || data.startup_phase || "cargando modelo") +
+          "). Espera un momento.";
       } else if (!modelLoaded) {
         error =
           "Puente activo pero el modelo no está cargado. " +
