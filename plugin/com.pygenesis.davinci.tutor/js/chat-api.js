@@ -1,7 +1,7 @@
 (function (global) {
   "use strict";
 
-  const BACKEND_BASE = "http://localhost:8000";
+  const BACKEND_BASE = "http://127.0.0.1:8000";
   const REQUEST_TIMEOUT_MS = 120000;
 
   function fetchWithTimeout(url, options, timeoutMs) {
@@ -52,15 +52,17 @@
       }
 
       const data = await response.json();
-      var bridgeUp = data.status === "ok" || data.status === "degraded";
-      var modelLoaded = data.model_loaded !== false;
+      var bridgeUp =
+        data.status === "ok" || data.status === "degraded" || data.status === "starting";
+      var modelLoaded = !!data.model_loaded;
       var error = null;
       if (!bridgeUp) {
         error = "Estado del puente: " + (data.status || "desconocido");
-      } else if (!modelLoaded) {
+      } else if (data.status === "starting" || !modelLoaded) {
         error =
-          "Puente activo pero el modelo no está cargado. " +
-          (data.error || "Ejecuta installer\\install_pygenesis.ps1 o coloca el GGUF en %LOCALAPPDATA%\\Pygenesis\\models\\");
+          "El puente esta arrancando (" +
+          (data.startup_detail || data.startup_phase || "cargando modelo") +
+          "). Espera un momento.";
       }
       return {
         ok: bridgeUp && modelLoaded,

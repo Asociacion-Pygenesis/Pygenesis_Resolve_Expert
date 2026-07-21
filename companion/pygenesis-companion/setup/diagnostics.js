@@ -272,16 +272,18 @@ async function runDiagnostics(packageRoot) {
     },
     bridge: {
       id: "bridge",
-      label: "Puente (localhost:8000)",
+      label: "Puente (127.0.0.1:8000)",
       ok: bridge.ok,
       required: true,
+      // Conservar el JSON de /health para la UI de arranque
+      health: bridge.detail || null,
       detail: (() => {
         if (!bridge.ok) return "No esta en marcha (puedes arrancarlo desde aqui)";
         const d = bridge.detail || {};
         if (d.status === "starting") {
           return "Cargando... " + (d.startup_detail || d.startup_phase || "modelo");
         }
-        if (d.model_loaded) return "Activo";
+        if (d.model_loaded || d.status === "ok") return "Activo (modelo listo)";
         return "Activo (modelo pendiente: " + (d.error || d.startup_detail || "?") + ")";
       })(),
     },

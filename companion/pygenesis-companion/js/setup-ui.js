@@ -163,12 +163,12 @@
           });
           var st = await refresh();
           if (st && st.bridge && st.bridge.ok) {
-            var d = st.bridge.detail || {};
-            if (d.status === "starting") {
+            var d = st.bridge.health || {};
+            if (d.status === "starting" || (d.model_loaded === false && d.status !== "ok" && d.status !== "degraded")) {
               if (i % 5 === 0) {
                 appendLog(
                   "Cargando... " +
-                    (d.startup_detail || d.startup_phase || "modelo") +
+                    (d.startup_detail || d.startup_phase || st.bridge.detail || "modelo") +
                     " (" +
                     (i + 1) +
                     "s)"
@@ -178,14 +178,16 @@
             }
             if (d.model_loaded || d.status === "ok") {
               appendLog("Puente activo (modelo listo).");
-            } else {
+              ready = true;
+              break;
+            }
+            // Puente responde pero modelo aun no: seguir esperando un poco mas
+            if (i % 5 === 0) {
               appendLog(
-                "Puente activo. Modelo: " +
-                  (d.error || d.startup_detail || "pendiente")
+                "Puente activo, esperando modelo... " +
+                  (d.error || d.startup_detail || st.bridge.detail || "")
               );
             }
-            ready = true;
-            break;
           }
           if (i > 0 && i % 10 === 0) {
             appendLog("Aun sin respuesta en :8000 (" + (i + 1) + "s)...");
