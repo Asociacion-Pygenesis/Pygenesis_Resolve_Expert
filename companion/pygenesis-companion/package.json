@@ -1,6 +1,6 @@
 {
   "name": "pygenesis-companion",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Pygenesis Companion — setup guiado + chat para DaVinci Resolve",
   "main": "main.js",
   "private": true,

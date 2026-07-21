@@ -27,11 +27,18 @@ New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 function Write-BridgeLog {
     param([string]$Message)
     $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
-    Add-Content -LiteralPath $RunLog -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue
+    try {
+        [System.IO.File]::AppendAllText($RunLog, $line + [Environment]::NewLine, [System.Text.Encoding]::UTF8)
+    } catch {
+        try { Add-Content -LiteralPath $RunLog -Value $line -Encoding UTF8 } catch { }
+    }
     Write-Host $Message
 }
 
-Write-BridgeLog "=== start_backend.ps1 begin ==="
+try {
+    [System.IO.File]::AppendAllText($RunLog, ("[{0}] === start_backend.ps1 begin ===" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss")) + [Environment]::NewLine, [System.Text.Encoding]::UTF8)
+} catch { }
+
 Write-BridgeLog "Script=$PSCommandPath"
 Write-BridgeLog "BackendRoot=$BackendRoot"
 Write-BridgeLog "Port=$Port Force=$Force"

@@ -111,7 +111,7 @@ function resolveBackendStart(packageRoot) {
 }
 
 /**
- * Start bridge fully detached; logging lo hace start_backend.ps1
+ * Start bridge via .cmd + start (Electron spawn -Command/*>> no ejecuta el .ps1 en Windows).
  */
 function startBackend(packageRoot, hooks) {
   const script = resolveBackendStart(packageRoot);
@@ -122,28 +122,47 @@ function startBackend(packageRoot, hooks) {
     return Promise.resolve({ ok: true, already: true, script });
   }
 
-  const logDir = path.join(pygenesisHome(), "logs");
+  const home = pygenesisHome();
+  const logDir = path.join(home, "logs");
   fs.mkdirSync(logDir, { recursive: true });
   const logPath = path.join(logDir, "backend.log");
+  const cmdPath = path.join(home, "Start-Backend-Hidden.cmd");
+  const psExe = powershellExe();
+
   fs.appendFileSync(
     logPath,
     "\n==== " + new Date().toISOString() + " companion-launch " + script + " ====\n",
     "utf8"
   );
 
-  // Lanzar PowerShell totalmente separado (sin heredar fd de Electron).
-  // start_backend.ps1 escribe solo en backend.log.
-  const command =
-    "$ErrorActionPreference='Continue'; " +
-    "& " +
-    psQuote(script) +
-    " *>> " +
-    psQuote(logPath);
+  // Launcher .cmd: si esto no aparece en el log, ni siquiera arranco cmd/start.
+  const cmdBody =
+    "@echo off\r\n" +
+    "echo [" + "%date% %time%" + "] cmd-launcher OK>> \"" + logPath + "\"\r\n" +
+    "\"" + psExe + "\" -NoProfile -ExecutionPolicy Bypass -File \"" + script + "\" >> \"" + logPath + "\" 2>&1\r\n" +
+    "echo [" + "%date% %time%" + "] powershell-exit %ERRORLEVEL%>> \"" + logPath + "\"\r\n";
+  fs.writeFileSync(cmdPath, cmdBody, "utf8");
+
+  // Actualizar Start-Backend.ps1 del home para el atajo del menu Inicio
+  try {
+    fs.writeFileSync(
+      path.join(home, "Start-Backend.ps1"),
+      "#Requires -Version 5.1\r\n& '" + script.replace(/'/g, "''") + "' @args\r\n",
+      "utf8"
+    );
+  } catch (_) {
+    /* ignore */
+  }
+
+  const cmdExe = process.env.SystemRoot
+    ? path.join(process.env.SystemRoot, "System32", "cmd.exe")
+    : "cmd.exe";
 
   return new Promise((resolve, reject) => {
+    // start "" = titulo vacio; /MIN ventana minimizada independiente de Electron
     const child = spawn(
-      powershellExe(),
-      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", command],
+      cmdExe,
+      ["/c", "start", "/MIN", "", cmdPath],
       {
         cwd: path.dirname(script),
         windowsHide: true,
@@ -155,11 +174,29 @@ function startBackend(packageRoot, hooks) {
     child.on("error", (err) => reject(err));
     child.unref();
     backendProc = child;
+
     if (hooks && hooks.onLine) {
-      hooks.onLine("Puente arrancado: " + script);
+      hooks.onLine("Puente arrancado via: " + cmdPath);
+      hooks.onLine("Script: " + script);
       hooks.onLine("Log: " + logPath);
     }
-    setTimeout(() => resolve({ ok: true, already: false, script, logPath }), 2000);
+
+    // Verificar que el launcher escribio en el log (si no, Electron no logro spawn)
+    setTimeout(() => {
+      let launched = false;
+      try {
+        const text = fs.readFileSync(logPath, "utf8");
+        launched = /cmd-launcher OK|start_backend\.ps1 begin/i.test(text);
+      } catch (_) {
+        launched = false;
+      }
+      if (!launched && hooks && hooks.onLine) {
+        hooks.onLine(
+          "AVISO: no se ve actividad en el log. Prueba menu Inicio → Pygenesis Backend."
+        );
+      }
+      resolve({ ok: true, already: false, script, logPath, cmdPath, launched });
+    }, 2500);
   });
 }
 
