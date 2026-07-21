@@ -216,17 +216,21 @@ try {
     Write-BridgeLog "Puente ResolveExpert en http://127.0.0.1:$Port"
     Write-BridgeLog "Lanzando: $VenvPython -m uvicorn main:app --host 127.0.0.1 --port $Port"
 
-    # Redirigir stdout/stderr de uvicorn al log (Add-Content en vivo)
-    & $VenvPython -m uvicorn main:app --host 127.0.0.1 --port $Port 2>&1 |
-        ForEach-Object {
-            $text = "$_"
-            Add-Content -LiteralPath $RunLog -Value $text -Encoding UTF8 -ErrorAction SilentlyContinue
-            Write-Host $text
-        }
-    Write-BridgeLog "uvicorn termino con codigo $LASTEXITCODE"
-    exit $LASTEXITCODE
+    # Critico: con ErrorAction Stop, cualquier linea en stderr de uvicorn
+    # (Traceback, logs) se convierte en excepcion y mata el script.
+    $env:PYTHONUNBUFFERED = "1"
+    $ErrorActionPreference = "Continue"
+    & $VenvPython -m uvicorn main:app --host 127.0.0.1 --port $Port
+    $code = $LASTEXITCODE
+    if ($null -eq $code) { $code = 1 }
+    Write-BridgeLog "uvicorn termino con codigo $code"
+    exit $code
 } catch {
     Write-BridgeLog ("ERROR FATAL: " + $_.Exception.Message)
+    if ($_.Exception.InnerException) {
+        Write-BridgeLog ("Inner: " + $_.Exception.InnerException.Message)
+    }
+    Write-BridgeLog ("Tipo: " + $_.Exception.GetType().FullName)
     Write-BridgeLog ($_.ScriptStackTrace)
     exit 1
 }
