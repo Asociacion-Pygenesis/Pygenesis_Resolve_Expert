@@ -19,28 +19,49 @@ $ErrorActionPreference = "Stop"
 $BackendRoot = Split-Path $PSScriptRoot -Parent
 $RepoRoot = Split-Path $BackendRoot -Parent
 $BridgeEnv = Join-Path $env:LOCALAPPDATA "Pygenesis\bridge.env"
+$LogDir = Join-Path $env:LOCALAPPDATA "Pygenesis\logs"
+$RunLog = Join-Path $LogDir "backend.log"
+
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+
+function Write-BridgeLog {
+    param([string]$Message)
+    $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
+    Add-Content -LiteralPath $RunLog -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue
+    Write-Host $Message
+}
+
+Write-BridgeLog "=== start_backend.ps1 begin ==="
+Write-BridgeLog "Script=$PSCommandPath"
+Write-BridgeLog "BackendRoot=$BackendRoot"
+Write-BridgeLog "Port=$Port Force=$Force"
 
 if (Test-Path $BridgeEnv) {
+    Write-BridgeLog "Cargando bridge.env"
     Get-Content $BridgeEnv | ForEach-Object {
         if ($_ -match '^\s*([^#=]+)=(.*)$') {
             $name = $matches[1].Trim()
             $value = $matches[2].Trim()
             Set-Item -Path "Env:$name" -Value $value
+            if ($name -eq "PYGENESIS_PYTHON" -or $name -eq "PYGENESIS_MODEL_PATH" -or $name -eq "PYGENESIS_GPU_BACKEND") {
+                Write-BridgeLog ("  {0}={1}" -f $name, $value)
+            }
         }
     }
+} else {
+    Write-BridgeLog "AVISO: no existe bridge.env"
 }
 
 function Resolve-PygenesisPython {
     if ($env:PYGENESIS_PYTHON) {
         $candidate = $env:PYGENESIS_PYTHON.Trim()
-        # bridge.env corrupto a veces mezcla salida de pip + ruta
         if ($candidate -match '(?i)((?:[A-Za-z]:\\|\\\\)[^\r\n]*python\.exe)\s*$') {
             $candidate = $Matches[1].Trim()
         }
         if (($candidate -match '(?i)\.exe$') -and (Test-Path -LiteralPath $candidate)) {
             return $candidate
         }
-        Write-Host "PYGENESIS_PYTHON invalido; usando runtime por defecto." -ForegroundColor Yellow
+        Write-BridgeLog "PYGENESIS_PYTHON invalido; usando runtime por defecto."
     }
     $runtime = Join-Path $env:LOCALAPPDATA "Pygenesis\runtime\Scripts\python.exe"
     if (Test-Path $runtime) { return $runtime }
@@ -48,8 +69,6 @@ function Resolve-PygenesisPython {
     if (Test-Path $dev) { return $dev }
     return $null
 }
-
-$VenvPython = Resolve-PygenesisPython
 
 if (-not $env:VULKAN_SDK) {
     $machineVulkan = [Environment]::GetEnvironmentVariable("VULKAN_SDK", "Machine")
@@ -86,7 +105,6 @@ function Get-UvicornPids([int]$ListenPort) {
             if (-not $cmd) { return }
             $isUvicorn = ($cmd -match 'uvicorn') -and ($cmd -match 'main:app')
             $isWorker = $cmd -match 'multiprocessing\.spawn' -and $cmd -match 'spawn_main'
-            $matchesPort = $cmd -match "port\s+$ListenPort"
             if ($isUvicorn -or $isWorker) {
                 [void]$pids.Add($_.ProcessId)
             }
@@ -104,7 +122,7 @@ function Stop-BridgeProcesses([int]$ListenPort) {
         return $true
     }
 
-    Write-Host "Deteniendo procesos del puente (PIDs: $($targets -join ', '))..." -ForegroundColor Yellow
+    Write-BridgeLog "Deteniendo procesos del puente (PIDs: $($targets -join ', '))"
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     foreach ($procId in $targets) {
@@ -127,8 +145,7 @@ function Stop-BridgeProcesses([int]$ListenPort) {
 
     $still = Get-ListenerPids -ListenPort $ListenPort
     if ($still.Count -gt 0) {
-        Write-Host "No se pudo liberar el puerto $ListenPort. PIDs restantes: $($still -join ', ')" -ForegroundColor Red
-        Write-Host "Cierra manualmente esos procesos o reinicia Resolve/terminales con uvicorn." -ForegroundColor Yellow
+        Write-BridgeLog "ERROR: no se pudo liberar el puerto $ListenPort. PIDs: $($still -join ', ')"
         return $false
     }
     return $true
@@ -137,43 +154,72 @@ function Stop-BridgeProcesses([int]$ListenPort) {
 function Test-BridgeHealth([int]$ListenPort) {
     try {
         $resp = Invoke-RestMethod -Uri "http://127.0.0.1:$ListenPort/health" -TimeoutSec 2
-        return ($resp.status -eq "ok")
+        return ($null -ne $resp.status)
     } catch {
         return $false
     }
 }
 
-if (-not $VenvPython) {
-    Write-Host "No se encontró el runtime de Pygenesis." -ForegroundColor Yellow
-    Write-Host "Ejecuta installer\Install.bat (usuario) o training\scripts\setup_env_windows.ps1 (dev)." -ForegroundColor Yellow
-    exit 1
-}
-
-$listenerPids = Get-ListenerPids -ListenPort $Port
-if ($listenerPids.Count -gt 0) {
-    if ((Test-BridgeHealth -ListenPort $Port) -and -not $Force) {
-        Write-Host "El puente ya está activo en http://127.0.0.1:$Port" -ForegroundColor Green
-        Write-Host "Health: http://127.0.0.1:$Port/health" -ForegroundColor DarkGray
-        Write-Host "PIDs en puerto ${Port}: $($listenerPids -join ', ')" -ForegroundColor DarkGray
-        Write-Host "Para reiniciar: .\start_backend.ps1 -Force" -ForegroundColor Yellow
-        exit 0
-    }
-
-    if (-not (Stop-BridgeProcesses -ListenPort $Port)) {
+try {
+    $VenvPython = Resolve-PygenesisPython
+    if (-not $VenvPython) {
+        Write-BridgeLog "ERROR: No se encontro el runtime de Pygenesis."
+        Write-BridgeLog "Ejecuta Install.bat / Companion (Instalar lo que falta)."
         exit 1
     }
+    Write-BridgeLog "Python=$VenvPython"
+    $pyVer = & $VenvPython -c "import sys; print(sys.version)" 2>&1
+    Write-BridgeLog "Version=$pyVer"
+
+    $listenerPids = Get-ListenerPids -ListenPort $Port
+    if ($listenerPids.Count -gt 0) {
+        if ((Test-BridgeHealth -ListenPort $Port) -and -not $Force) {
+            Write-BridgeLog "El puente ya esta activo en http://127.0.0.1:$Port"
+            exit 0
+        }
+        if (-not (Stop-BridgeProcesses -ListenPort $Port)) {
+            exit 1
+        }
+    }
+
+    $mainPy = Join-Path $BackendRoot "main.py"
+    if (-not (Test-Path -LiteralPath $mainPy)) {
+        Write-BridgeLog "ERROR: no existe main.py en $BackendRoot"
+        exit 1
+    }
+
+    Write-BridgeLog "Comprobando uvicorn..."
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $UvicornCheck = & $VenvPython -m uvicorn --version 2>&1
+    $uvCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+    Write-BridgeLog "uvicorn check exit=$uvCode :: $UvicornCheck"
+    if ($uvCode -ne 0) {
+        Write-BridgeLog "Instalando dependencias del puente..."
+        & $VenvPython -m pip install -r (Join-Path $BackendRoot "requirements.txt") 2>&1 |
+            ForEach-Object { Write-BridgeLog "$_" }
+        if ($LASTEXITCODE -ne 0) {
+            Write-BridgeLog "ERROR: falló pip install requirements.txt"
+            exit 1
+        }
+    }
+
+    Set-Location -LiteralPath $BackendRoot
+    Write-BridgeLog "Puente ResolveExpert en http://127.0.0.1:$Port"
+    Write-BridgeLog "Lanzando: $VenvPython -m uvicorn main:app --host 127.0.0.1 --port $Port"
+
+    # Redirigir stdout/stderr de uvicorn al log (Add-Content en vivo)
+    & $VenvPython -m uvicorn main:app --host 127.0.0.1 --port $Port 2>&1 |
+        ForEach-Object {
+            $text = "$_"
+            Add-Content -LiteralPath $RunLog -Value $text -Encoding UTF8 -ErrorAction SilentlyContinue
+            Write-Host $text
+        }
+    Write-BridgeLog "uvicorn termino con codigo $LASTEXITCODE"
+    exit $LASTEXITCODE
+} catch {
+    Write-BridgeLog ("ERROR FATAL: " + $_.Exception.Message)
+    Write-BridgeLog ($_.ScriptStackTrace)
+    exit 1
 }
-
-$UvicornCheck = & $VenvPython -m uvicorn --version 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Instalando dependencias del puente (primera vez)..." -ForegroundColor Yellow
-    & $VenvPython -m pip install -r (Join-Path $BackendRoot "requirements.txt")
-    if ($LASTEXITCODE -ne 0) { exit 1 }
-}
-
-Set-Location $BackendRoot
-Write-Host "Puente ResolveExpert en http://127.0.0.1:$Port" -ForegroundColor Cyan
-Write-Host "Health: http://127.0.0.1:$Port/health" -ForegroundColor DarkGray
-Write-Host "Ctrl+C para detener." -ForegroundColor DarkGray
-
-& $VenvPython -m uvicorn main:app --host 127.0.0.1 --port $Port

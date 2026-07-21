@@ -5,10 +5,10 @@
 
 .EXAMPLE
   .\installer\publish_github_release.ps1
-  .\installer\publish_github_release.ps1 -Tag v0.2.7
+  .\installer\publish_github_release.ps1 -Tag v0.2.8
 #>
 param(
-    [string]$Tag = "v0.2.7",
+    [string]$Tag = "v0.2.8",
     [string]$ExePath = "",
     [string]$Repo = "Asociacion-Pygenesis/Pygenesis_Resolve_Expert"
 )
@@ -16,7 +16,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 if (-not $ExePath) {
-    $ExePath = Join-Path $RepoRoot "companion\dist\Pygenesis-Companion-0.2.7-portable.exe"
+    $ExePath = Join-Path $RepoRoot "companion\dist\Pygenesis-Companion-0.2.8-portable.exe"
 }
 
 if (-not (Test-Path $ExePath)) {

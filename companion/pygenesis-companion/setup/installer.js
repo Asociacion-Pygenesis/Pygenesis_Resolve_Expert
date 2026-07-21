@@ -14,6 +14,10 @@ function powershellExe() {
     : "powershell.exe";
 }
 
+function psQuote(value) {
+  return "'" + String(value).replace(/'/g, "''") + "'";
+}
+
 /**
  * Run closed installer. Skips Companion copy (we are already Companion).
  * @param {string} packageRoot
@@ -69,13 +73,36 @@ function runInstall(packageRoot, hooks) {
   });
 }
 
+/**
+ * Copia backend embebido -> %LOCALAPPDATA%\Pygenesis\app\backend
+ * (evita ejecutar desde Temp del portable, que no deja log fiable).
+ */
+function syncBackendToApp(packageRoot) {
+  const src = path.join(packageRoot, "backend");
+  const dst = path.join(pygenesisHome(), "app", "backend");
+  if (!fs.existsSync(src)) return null;
+  fs.mkdirSync(path.join(pygenesisHome(), "app"), { recursive: true });
+  fs.cpSync(src, dst, { recursive: true, force: true });
+  const start = path.join(dst, "scripts", "start_backend.ps1");
+  return fs.existsSync(start) ? start : null;
+}
+
 function resolveBackendStart(packageRoot) {
-  // Preferir el backend embebido en Companion (siempre coincide con la version del .exe)
-  const pkgStart = path.join(packageRoot, "backend", "scripts", "start_backend.ps1");
-  if (packageRoot && fs.existsSync(pkgStart)) return pkgStart;
+  // 1) Sincronizar desde el .exe y usar AppDir (ruta estable)
+  if (packageRoot) {
+    try {
+      const synced = syncBackendToApp(packageRoot);
+      if (synced) return synced;
+    } catch (_) {
+      /* fallback abajo */
+    }
+  }
 
   const appStart = path.join(pygenesisHome(), "app", "backend", "scripts", "start_backend.ps1");
   if (fs.existsSync(appStart)) return appStart;
+
+  const pkgStart = path.join(packageRoot || "", "backend", "scripts", "start_backend.ps1");
+  if (packageRoot && fs.existsSync(pkgStart)) return pkgStart;
 
   const homeStart = path.join(pygenesisHome(), "Start-Backend.ps1");
   if (fs.existsSync(homeStart)) return homeStart;
@@ -84,7 +111,7 @@ function resolveBackendStart(packageRoot) {
 }
 
 /**
- * Start bridge in background; log to %LOCALAPPDATA%\Pygenesis\logs\backend.log
+ * Start bridge fully detached; logging lo hace start_backend.ps1
  */
 function startBackend(packageRoot, hooks) {
   const script = resolveBackendStart(packageRoot);
@@ -98,39 +125,41 @@ function startBackend(packageRoot, hooks) {
   const logDir = path.join(pygenesisHome(), "logs");
   fs.mkdirSync(logDir, { recursive: true });
   const logPath = path.join(logDir, "backend.log");
-  const logFd = fs.openSync(logPath, "a");
-  fs.writeSync(
-    logFd,
-    "\n==== " + new Date().toISOString() + " start " + script + " ====\n"
+  fs.appendFileSync(
+    logPath,
+    "\n==== " + new Date().toISOString() + " companion-launch " + script + " ====\n",
+    "utf8"
   );
+
+  // Lanzar PowerShell totalmente separado (sin heredar fd de Electron).
+  // start_backend.ps1 escribe solo en backend.log.
+  const command =
+    "$ErrorActionPreference='Continue'; " +
+    "& " +
+    psQuote(script) +
+    " *>> " +
+    psQuote(logPath);
 
   return new Promise((resolve, reject) => {
     const child = spawn(
       powershellExe(),
-      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script],
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", command],
       {
         cwd: path.dirname(script),
         windowsHide: true,
         detached: true,
-        stdio: ["ignore", logFd, logFd],
-        env: process.env,
+        stdio: "ignore",
+        env: Object.assign({}, process.env, { PYTHONUNBUFFERED: "1" }),
       }
     );
-    child.on("error", (err) => {
-      try {
-        fs.closeSync(logFd);
-      } catch (_) {
-        /* ignore */
-      }
-      reject(err);
-    });
+    child.on("error", (err) => reject(err));
     child.unref();
     backendProc = child;
     if (hooks && hooks.onLine) {
       hooks.onLine("Puente arrancado: " + script);
       hooks.onLine("Log: " + logPath);
     }
-    setTimeout(() => resolve({ ok: true, already: false, script, logPath }), 1500);
+    setTimeout(() => resolve({ ok: true, already: false, script, logPath }), 2000);
   });
 }
 
@@ -143,4 +172,5 @@ module.exports = {
   startBackend,
   isInstallRunning,
   resolveBackendStart,
+  syncBackendToApp,
 };
