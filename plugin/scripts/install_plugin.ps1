@@ -37,7 +37,6 @@ $SdkCandidates = @(
 )
 
 New-Item -ItemType Directory -Force -Path $TargetRoot | Out-Null
-New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
 
 function Sync-PluginFiles {
     param([string]$From, [string]$To)
@@ -52,30 +51,44 @@ function Sync-PluginFiles {
     }
 }
 
+# Importante: NO hacer Copy-Item carpeta -> carpeta ya existente (anida PluginId\PluginId\).
+# Copiar el directorio del plugin al padre, o sincronizar ficheros al destino final.
+$copied = $false
 if (Test-Path $TargetDir) {
-    if ($Force) {
-        try {
-            Remove-Item $TargetDir -Recurse -Force -ErrorAction Stop
-            New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
-            Copy-Item -Path $SourceDir -Destination $TargetDir -Recurse
-        } catch {
-            Write-Host "Resolve tiene archivos bloqueados; actualizando sin borrar carpeta..." -ForegroundColor Yellow
-            Sync-PluginFiles -From $SourceDir -To $TargetDir
-        }
-    } else {
+    if (-not $Force) {
         Write-Host "El plugin ya está instalado en:" -ForegroundColor Yellow
         Write-Host "  $TargetDir"
         Write-Host "Usa -Force para actualizar la instalación."
         exit 1
     }
-} else {
-    Copy-Item -Path $SourceDir -Destination $TargetDir -Recurse
+    try {
+        Remove-Item $TargetDir -Recurse -Force -ErrorAction Stop
+    } catch {
+        Write-Host "Resolve tiene archivos bloqueados; actualizando sin borrar carpeta..." -ForegroundColor Yellow
+        Sync-PluginFiles -From $SourceDir -To $TargetDir
+        $copied = $true
+    }
 }
+
+if (-not $copied) {
+    Copy-Item -Path $SourceDir -Destination $TargetRoot -Recurse -Force
+}
+
 Write-Host "Plugin copiado a: $TargetDir" -ForegroundColor Green
 
 $manifestPath = Join-Path $TargetDir "manifest.xml"
 if (-not (Test-Path $manifestPath)) {
-    throw "Falta manifest.xml en la instalación."
+    # Recuperacion si una instalacion previa dejo el arbol anidado
+    $nestedManifest = Join-Path $TargetDir "$PluginId\manifest.xml"
+    if (Test-Path $nestedManifest) {
+        Write-Host "Detectada copia anidada; aplanando instalacion..." -ForegroundColor Yellow
+        $nestedDir = Join-Path $TargetDir $PluginId
+        Sync-PluginFiles -From $nestedDir -To $TargetDir
+        Remove-Item $nestedDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+if (-not (Test-Path $manifestPath)) {
+    throw "Falta manifest.xml en la instalacion: $manifestPath"
 }
 $manifestText = Get-Content $manifestPath -Raw
 if ($manifestText -notmatch "<Plugin>" -or $manifestText -notmatch "<FilePath>") {
