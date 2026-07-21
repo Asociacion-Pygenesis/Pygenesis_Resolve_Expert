@@ -24,13 +24,7 @@ from page_context import (
     pagina_para_revision,
 )
 from response_filters import limpiar_respuesta_modelo
-
-import sys
-
-_TRAINING_SCRIPTS = Path(__file__).resolve().parents[1] / "training" / "scripts"
-if str(_TRAINING_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_TRAINING_SCRIPTS))
-from _resolve_system import RESOLVE_SYSTEM  # noqa: E402
+from resolve_system import RESOLVE_SYSTEM
 
 BACKEND_ROOT = Path(__file__).resolve().parent
 VECTOR_DIR = BACKEND_ROOT / "vectorstore"

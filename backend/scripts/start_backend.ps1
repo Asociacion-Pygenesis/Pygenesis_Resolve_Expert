@@ -28,17 +28,24 @@ function Write-BridgeLog {
     param([string]$Message)
     $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
     try {
-        [System.IO.File]::AppendAllText($RunLog, $line + [Environment]::NewLine, [System.Text.Encoding]::UTF8)
+        # FileShare.ReadWrite: el .cmd tambien tiene el log abierto con >>
+        $fs = [System.IO.File]::Open(
+            $RunLog,
+            [System.IO.FileMode]::Append,
+            [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::ReadWrite
+        )
+        $sw = New-Object System.IO.StreamWriter($fs, [System.Text.Encoding]::UTF8)
+        $sw.WriteLine($line)
+        $sw.Dispose()
+        $fs.Dispose()
     } catch {
-        try { Add-Content -LiteralPath $RunLog -Value $line -Encoding UTF8 } catch { }
+        # no tumbar el puente por un fallo de log
     }
     Write-Host $Message
 }
 
-try {
-    [System.IO.File]::AppendAllText($RunLog, ("[{0}] === start_backend.ps1 begin ===" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss")) + [Environment]::NewLine, [System.Text.Encoding]::UTF8)
-} catch { }
-
+Write-BridgeLog "=== start_backend.ps1 begin ==="
 Write-BridgeLog "Script=$PSCommandPath"
 Write-BridgeLog "BackendRoot=$BackendRoot"
 Write-BridgeLog "Port=$Port Force=$Force"
