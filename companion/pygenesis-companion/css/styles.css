@@ -43,6 +43,12 @@ body {
   height: 100vh;
 }
 
+/* Vista setup vs chat: sin esto el chat queda debajo del setup (body overflow:hidden) */
+.app.hidden,
+.hidden {
+  display: none !important;
+}
+
 /* --- Header --- */
 .header {
   display: flex;

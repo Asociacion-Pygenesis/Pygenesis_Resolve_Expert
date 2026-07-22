@@ -212,17 +212,28 @@
       appendLog("Aun faltan runtime o modelo.");
       return;
     }
-    if (!st.bridge.ok) {
+    if (!st.bridge || !st.bridge.ok) {
+      appendLog("El puente no esta activo; intentando arrancarlo...");
       await startBackend();
       st = await refresh();
-      if (!st || !st.bridge.ok) {
+      if (!st || !st.bridge || !st.bridge.ok) {
         appendLog("El puente no responde. Revisa el log o arranca Pygenesis Backend.");
         return;
       }
     }
+    // Con Free no hace falta Resolve abierto: el chat vive en Companion.
     showSetup(false);
+    appendLog("Abriendo chat en Companion...");
     if (global.ChatUI && global.ChatUI.init) {
-      global.ChatUI.init();
+      try {
+        global.ChatUI.init();
+      } catch (err) {
+        appendLog("Error al iniciar chat: " + err);
+        showSetup(true);
+      }
+    } else {
+      appendLog("AVISO: ChatUI no cargado; recarga Companion.");
+      showSetup(true);
     }
   }
 
